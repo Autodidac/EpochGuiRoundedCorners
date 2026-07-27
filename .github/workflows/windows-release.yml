@@ -9,6 +9,7 @@ on:
       - CMakePresets.json
       - VERSION
       - README.md
+      - assets/**
       - include/**
       - modules/**
       - src/**
@@ -61,7 +62,7 @@ jobs:
         shell: pwsh
         run: ctest --test-dir build -C Release --output-on-failure
 
-      - name: Package single-application ZIP
+      - name: Package complete demo ZIP
         shell: pwsh
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
@@ -74,8 +75,14 @@ jobs:
               throw "Expected application was not built: $source"
           }
 
+          $asset = Join-Path $env:GITHUB_WORKSPACE 'assets\epochgui_demo.ppm'
+          if (-not (Test-Path $asset)) {
+              throw "Expected image asset is missing: $asset"
+          }
+
           $stageName = "EpochGui_Demo-v$version-windows-x64"
           $stage = Join-Path $env:RUNNER_TEMP $stageName
+          $stageAssets = Join-Path $stage 'assets'
           $zip = Join-Path $env:GITHUB_WORKSPACE "$stageName.zip"
           $checksum = "$zip.sha256"
           $verify = Join-Path $env:RUNNER_TEMP "$stageName-verify"
@@ -84,10 +91,11 @@ jobs:
           Remove-Item $verify -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $zip -Force -ErrorAction SilentlyContinue
           Remove-Item $checksum -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Path $stage | Out-Null
+          New-Item -ItemType Directory -Path $stageAssets -Force | Out-Null
 
           Copy-Item $source (Join-Path $stage 'EpochGuiDemo.exe')
           Copy-Item README.md $stage
+          Copy-Item $asset (Join-Path $stageAssets 'epochgui_demo.ppm')
 
           @(
               "EpochGui Demo v$version"
@@ -96,10 +104,11 @@ jobs:
               'Compiler: MSVC'
               'Renderer: OpenGL 3.2 core through native Win32/WGL'
               'Library: Autodidac/EpochGui'
-              'Features: live floating windows, right-click popups, selectable controls, rounded geometry'
-              'Input: optional EpochGui fallback enabled for this standalone demo'
-              'Window chrome: borderless replacement title bar with native move, resize, snap and commands'
-              'Contents: one user-facing executable'
+              'Coverage: every currently exported EpochGui subsystem'
+              'Features: floating windows, docking, dockable windows, panel hosting, popups, text controls, static text, image loading/display, progress, splitters, lists and segmented controls'
+              'Input: optional EpochGui fallback enabled only for this standalone demo'
+              'Window chrome: custom EpochGui title bar always visible; native outer frame enabled by default and toggleable at runtime'
+              'Contents: one user-facing executable plus the demo image asset'
           ) | Set-Content -Path (Join-Path $stage 'BUILD.txt') -Encoding utf8
 
           $stagedExecutables = @(Get-ChildItem $stage -Filter '*.exe' -File)
@@ -118,6 +127,9 @@ jobs:
           $verifiedExecutables = @(Get-ChildItem $verify -Filter '*.exe' -File -Recurse)
           if ($verifiedExecutables.Count -ne 1 -or $verifiedExecutables[0].Name -ne 'EpochGuiDemo.exe') {
               throw 'Packaged ZIP does not contain exactly one expected executable.'
+          }
+          if (-not (Test-Path (Join-Path $verify 'assets\epochgui_demo.ppm'))) {
+              throw 'Packaged ZIP is missing assets/epochgui_demo.ppm.'
           }
 
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -141,7 +153,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $notes = 'Windows x64 live EpochGui demo with draggable and resizable floating windows, right-click context menus, selectable controls, optional rounded geometry, optional fallback input, and a borderless replacement title bar mapped to native Windows move, resize, snap, minimize, maximize, and close behavior. The ZIP contains one executable, README.md, and BUILD.txt.'
+          $notes = 'Windows x64 complete EpochGui catalog. The custom EpochGui title bar is always visible, while the native outer frame is enabled by default and can be toggled to borderless mode. Floating-window close/reopen behavior is fixed. The demo covers all currently exported EpochGui subsystems and includes editable text, read-only static text, and bundled image loading/display. The ZIP contains one executable, README.md, BUILD.txt, and the image asset.'
 
           gh release view $env:RELEASE_TAG *> $null
           if ($LASTEXITCODE -eq 0) {
