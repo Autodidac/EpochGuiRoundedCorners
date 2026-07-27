@@ -19,6 +19,7 @@ jobs:
           ref: agent/raster-assets
           path: EpochGui_Demo
           fetch-depth: 0
+          show-progress: false
 
       - name: Check out EpochGui migration branch
         uses: actions/checkout@v4
@@ -26,21 +27,38 @@ jobs:
           repository: Autodidac/EpochGui
           ref: agent/raster-assets
           path: EpochGui
+          show-progress: false
 
       - name: Apply migration
         run: python EpochGui_Demo/tools/apply_raster_assets_migration.py
 
       - name: Install Linux build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build libx11-dev libgl1-mesa-dev
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build libx11-dev libgl1-mesa-dev
 
       - name: Configure
+        id: configure
+        continue-on-error: true
         run: >-
           cmake -S EpochGui_Demo -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release
           -DEPOCHGUI_ROOT=${{ github.workspace }}/EpochGui
           -DBUILD_TESTING=ON
+          > configure.log 2>&1
+
+      - name: Upload configure diagnostics
+        if: steps.configure.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: configure-log
+          path: configure.log
+
+      - name: Report configure failure
+        if: steps.configure.outcome == 'failure'
+        run: |
+          cat configure.log
+          exit 1
 
       - name: Build
         run: cmake --build build --parallel 2
