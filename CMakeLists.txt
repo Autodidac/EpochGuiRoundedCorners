@@ -57,8 +57,45 @@ add_subdirectory(
     "${CMAKE_CURRENT_BINARY_DIR}/EpochGui"
 )
 
+set(_epochgui_demo_renderer_source
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/complete_demo_renderer.cpp")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${_epochgui_demo_renderer_source}")
+
+file(READ "${_epochgui_demo_renderer_source}" _epochgui_demo_renderer_body)
+string(REGEX REPLACE
+    "^module;[\r\n]+"
+    ""
+    _epochgui_demo_renderer_body
+    "${_epochgui_demo_renderer_body}")
+
+set(_epochgui_demo_renderer_adapter [=[module;
+
+#define splitter_hit_test(splitter_layout, pointer_position, hit_slop) \
+    splitter_hit_test_with_capture( \
+        (splitter_layout), \
+        (pointer_position), \
+        (hit_slop), \
+        frame.pointer(input::PointerButton::left).pressed)
+
+#define splitter_fraction_from_point(splitter_options, pointer_position) \
+    splitter_fraction_from_visible_point( \
+        (splitter_options), \
+        (pointer_position))
+
+]=])
+
+set(_epochgui_demo_generated_dir
+    "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(_epochgui_demo_generated_renderer
+    "${_epochgui_demo_generated_dir}/complete_demo_renderer.cpp")
+file(MAKE_DIRECTORY "${_epochgui_demo_generated_dir}")
+file(WRITE
+    "${_epochgui_demo_generated_renderer}"
+    "${_epochgui_demo_renderer_adapter}${_epochgui_demo_renderer_body}")
+
 add_library(epoch_gui_demo_renderer STATIC
-    src/complete_demo_renderer_build.cpp
+    "${_epochgui_demo_generated_renderer}"
     src/app_bridge.cpp
 )
 
