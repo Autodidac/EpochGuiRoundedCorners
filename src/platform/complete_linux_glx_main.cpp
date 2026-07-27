@@ -14,12 +14,6 @@
 
 namespace
 {
-    constexpr int GLX_CONTEXT_MAJOR_VERSION_ARB = 0x2091;
-    constexpr int GLX_CONTEXT_MINOR_VERSION_ARB = 0x2092;
-    constexpr int GLX_CONTEXT_FLAGS_ARB = 0x2094;
-    constexpr int GLX_CONTEXT_PROFILE_MASK_ARB = 0x9126;
-    constexpr int GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB = 0x0002;
-    constexpr int GLX_CONTEXT_CORE_PROFILE_BIT_ARB = 0x00000001;
     constexpr unsigned long MWM_HINTS_DECORATIONS = 1UL << 1U;
     constexpr std::size_t icon_size = 32;
 
@@ -444,7 +438,7 @@ namespace
                 epoch_gui_demo_key_event(renderer_, key, down, false);
 
             update_modifiers(event.state);
-            if (down && text_length > 0)
+            if (down && text_length > 0 && key < 0)
             {
                 text[static_cast<std::size_t>(text_length)] = '\0';
                 epoch_gui_demo_text_input(renderer_, text.data());
