@@ -80,6 +80,8 @@ The native Windows outer frame is enabled by default. The toolbar toggle switche
 
 The custom minimize, maximize, and close buttons remain active in both modes. On Windows, the custom caption and resize regions are mapped through `WM_NCHITTEST`, retaining native moving, snapping, and resizing behavior.
 
+Both the toolbar switch and the right-click context-menu switch use the same deferred host path. The renderer posts a private Windows message, the style change runs after the current input/render callback returns, and `WM_SIZE` only updates the viewport and invalidates the window. This avoids recursively entering the OpenGL renderer while `SWP_FRAMECHANGED` is rebuilding the native frame.
+
 ## Optional fallback input
 
 Input is disabled by default in EpochGui:
