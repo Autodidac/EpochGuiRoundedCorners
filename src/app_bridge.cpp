@@ -1,6 +1,7 @@
 #include "epochgui_demo/app_bridge.hpp"
 
 #include <new>
+#include <string_view>
 
 import epoch.gui.demo.opengl;
 
@@ -138,6 +139,14 @@ void epoch_gui_demo_modifiers(
     });
 }
 
+void epoch_gui_demo_text_input(
+    epoch_gui_demo_renderer* renderer,
+    const char* utf8_text)
+{
+    if (renderer && utf8_text)
+        renderer->renderer.text_input(std::string_view{ utf8_text });
+}
+
 int epoch_gui_demo_window_hit_test(
     const epoch_gui_demo_renderer* renderer,
     float x,
@@ -155,6 +164,14 @@ int epoch_gui_demo_take_window_command(epoch_gui_demo_renderer* renderer)
         return EPOCH_GUI_DEMO_COMMAND_NONE;
 
     return static_cast<int>(renderer->renderer.take_window_command());
+}
+
+int epoch_gui_demo_take_native_frame_mode(epoch_gui_demo_renderer* renderer)
+{
+    if (!renderer)
+        return EPOCH_GUI_DEMO_FRAME_MODE_NONE;
+
+    return renderer->renderer.take_native_frame_mode();
 }
 
 void epoch_gui_demo_render(epoch_gui_demo_renderer* renderer)
