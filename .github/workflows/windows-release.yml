@@ -1,0 +1,126 @@
+name: Windows Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - CMakeLists.txt
+      - VERSION
+      - modules/**
+      - src/**
+      - .github/workflows/windows-release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build Windows x64 release
+    runs-on: windows-2022
+
+    steps:
+      - name: Check out rounded-corner demo
+        uses: actions/checkout@v4
+
+      - name: Check out EpochEngine
+        uses: actions/checkout@v4
+        with:
+          repository: Autodidac/EpochEngine
+          ref: main
+          path: EpochEngine
+
+      - name: Configure MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure
+        shell: pwsh
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=ON
+          -DEPOCH_ENGINE_ROOT="${{ github.workspace }}/EpochEngine/Engine"
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --config Release
+
+      - name: Validate geometry and SVG generation
+        shell: pwsh
+        run: ctest --test-dir build --output-on-failure -C Release
+
+      - name: Package Windows release
+        id: package
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+              throw "VERSION must contain major.minor.patch"
+          }
+
+          $tag = "v$version"
+          $stageName = "EpochGuiRoundedCorners-$tag-windows-x64"
+          $stage = Join-Path $env:RUNNER_TEMP $stageName
+          $zip = Join-Path $env:GITHUB_WORKSPACE "$stageName.zip"
+          $checksum = "$zip.sha256"
+
+          Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item $zip -Force -ErrorAction SilentlyContinue
+          Remove-Item $checksum -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $stage | Out-Null
+
+          Copy-Item build/EpochGuiRoundedCorners.exe $stage
+          Copy-Item build/epoch_gui_rounded_corners_demo.exe $stage
+          Copy-Item README.md $stage
+
+          & build/epoch_gui_rounded_corners_demo.exe `
+              (Join-Path $stage 'epochgui_rounded_corners_demo.svg')
+          if ($LASTEXITCODE -ne 0) {
+              throw "The packaged geometry validator failed with exit code $LASTEXITCODE"
+          }
+
+          @(
+              "EpochGUI Rounded Corners $tag"
+              "Commit: $env:GITHUB_SHA"
+              "Platform: Windows x64"
+              "Compiler: MSVC"
+              "Runtime: static"
+          ) | Set-Content -Path (Join-Path $stage 'BUILD.txt') -Encoding utf8
+
+          Compress-Archive -Path "$stage/*" -DestinationPath $zip -CompressionLevel Optimal
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $([System.IO.Path]::GetFileName($zip))" | Set-Content $checksum -Encoding ascii
+
+          "RELEASE_TAG=$tag" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RELEASE_ZIP=$zip" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RELEASE_CHECKSUM=$checksum" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.RELEASE_TAG }}-windows-x64
+          path: |
+            ${{ env.RELEASE_ZIP }}
+            ${{ env.RELEASE_CHECKSUM }}
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view $env:RELEASE_TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+              Write-Host "Release $env:RELEASE_TAG already exists; leaving it unchanged."
+              exit 0
+          }
+
+          gh release create $env:RELEASE_TAG `
+              $env:RELEASE_ZIP `
+              $env:RELEASE_CHECKSUM `
+              --target $env:GITHUB_SHA `
+              --title "EpochGUI Rounded Corners $env:RELEASE_TAG" `
+              --notes "Windows x64 Direct2D demo plus the headless rounded-geometry validator and generated SVG reference. Built with C++23 modules and the current EpochGUI module from EpochEngine."
