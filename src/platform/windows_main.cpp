@@ -20,22 +20,31 @@ namespace
     using WglCreateContextAttribs = HGLRC(WINAPI*)(HDC, HGLRC, const int*);
     using WglSwapInterval = BOOL(WINAPI*)(int);
 
-    [[nodiscard]] bool invalid_wgl_address(PROC address) noexcept
+    [[nodiscard]] bool invalid_wgl_address(epoch_gui_demo_gl_proc address) noexcept
     {
         const auto value = reinterpret_cast<std::uintptr_t>(address);
-        return address == nullptr || value == 1U || value == 2U || value == 3U || value == static_cast<std::uintptr_t>(-1);
+        return address == nullptr
+            || value == 1U
+            || value == 2U
+            || value == 3U
+            || value == static_cast<std::uintptr_t>(-1);
     }
 
     [[nodiscard]] epoch_gui_demo_gl_proc load_opengl_proc(const char* name)
     {
-        PROC address = wglGetProcAddress(name);
-        if (invalid_wgl_address(address))
-        {
-            static HMODULE opengl_module = LoadLibraryW(L"opengl32.dll");
-            address = opengl_module ? GetProcAddress(opengl_module, name) : nullptr;
-        }
+        auto address = reinterpret_cast<epoch_gui_demo_gl_proc>(wglGetProcAddress(name));
+        if (!invalid_wgl_address(address))
+            return address;
 
-        return reinterpret_cast<epoch_gui_demo_gl_proc>(address);
+        static HMODULE opengl_module = []
+        {
+            HMODULE module = GetModuleHandleW(L"opengl32.dll");
+            return module ? module : LoadLibraryW(L"opengl32.dll");
+        }();
+
+        return opengl_module
+            ? reinterpret_cast<epoch_gui_demo_gl_proc>(GetProcAddress(opengl_module, name))
+            : nullptr;
     }
 
     class WindowsApplication final
@@ -61,8 +70,11 @@ namespace
             window_class.lpszClassName = class_name;
             window_class.hIconSm = LoadIconW(nullptr, IDI_APPLICATION);
 
-            if (!RegisterClassExW(&window_class) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+            if (!RegisterClassExW(&window_class)
+                && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+            {
                 return false;
+            }
 
             RECT frame{ 0, 0, 960, 620 };
             constexpr DWORD style = WS_OVERLAPPEDWINDOW;
@@ -100,7 +112,10 @@ namespace
 
             RECT client{};
             GetClientRect(window_, &client);
-            epoch_gui_demo_resize(renderer_, client.right - client.left, client.bottom - client.top);
+            epoch_gui_demo_resize(
+                renderer_,
+                client.right - client.left,
+                client.bottom - client.top);
 
             ShowWindow(window_, SW_SHOWNORMAL);
             UpdateWindow(window_);
