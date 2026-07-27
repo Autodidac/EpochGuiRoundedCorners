@@ -7,6 +7,7 @@
 
 #include "epochgui_demo/app_bridge.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -22,11 +23,6 @@ namespace
     constexpr UINT apply_native_frame_message = WM_APP + 1U;
 
     constexpr DWORD framed_style = WS_OVERLAPPEDWINDOW;
-    constexpr DWORD borderless_style = WS_POPUP
-        | WS_THICKFRAME
-        | WS_MINIMIZEBOX
-        | WS_MAXIMIZEBOX
-        | WS_SYSMENU;
 
     using WglCreateContextAttribs = HGLRC(WINAPI*)(HDC, HGLRC, const int*);
     using WglSwapInterval = BOOL(WINAPI*)(int);
@@ -324,22 +320,9 @@ namespace
             }
 
             frame_change_in_progress_ = true;
-            const bool previous_mode = native_frame_enabled_;
             native_frame_enabled_ = enabled;
-
-            SetLastError(ERROR_SUCCESS);
-            const LONG_PTR previous_style = SetWindowLongPtrW(
-                window_,
-                GWL_STYLE,
-                static_cast<LONG_PTR>(enabled ? framed_style : borderless_style));
-            if (previous_style == 0 && GetLastError() != ERROR_SUCCESS)
-            {
-                native_frame_enabled_ = previous_mode;
-                frame_change_in_progress_ = false;
-                return;
-            }
-
             apply_dwm_frame();
+
             SetWindowPos(
                 window_,
                 nullptr,
@@ -355,11 +338,7 @@ namespace
 
             update_renderer_size_from_client();
             frame_change_in_progress_ = false;
-            RedrawWindow(
-                window_,
-                nullptr,
-                nullptr,
-                RDW_INVALIDATE | RDW_FRAME | RDW_UPDATENOW);
+            InvalidateRect(window_, nullptr, FALSE);
         }
 
         void update_modifiers()
@@ -378,9 +357,16 @@ namespace
         {
             if (!renderer_
                 || !device_context_
+                || !render_context_
                 || rendering_
                 || frame_change_in_progress_
                 || graphics_shutdown_)
+            {
+                return;
+            }
+
+            if (wglGetCurrentContext() != render_context_
+                && !wglMakeCurrent(device_context_, render_context_))
             {
                 return;
             }
@@ -471,6 +457,16 @@ namespace
 
             case WM_NCCALCSIZE:
                 if (!native_frame_enabled_ && wparam != 0)
+                    return 0;
+                break;
+
+            case WM_NCACTIVATE:
+                if (!native_frame_enabled_)
+                    return TRUE;
+                break;
+
+            case WM_NCPAINT:
+                if (!native_frame_enabled_)
                     return 0;
                 break;
 
