@@ -1,5 +1,3 @@
-module;
-
 #include "epochgui_demo/app_bridge.hpp"
 
 #include <new>
