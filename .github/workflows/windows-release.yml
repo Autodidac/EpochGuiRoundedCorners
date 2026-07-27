@@ -49,6 +49,8 @@ jobs:
           -G "Visual Studio 17 2022"
           -A x64
           -DBUILD_TESTING=ON
+          -DEPOCHGUI_ENABLE_ROUNDED_RECT=ON
+          -DEPOCHGUI_ENABLE_INPUT=ON
           -DEPOCHGUI_ROOT="${{ github.workspace }}/EpochGui"
 
       - name: Build
@@ -94,7 +96,9 @@ jobs:
               'Compiler: MSVC'
               'Renderer: OpenGL 3.2 core through native Win32/WGL'
               'Library: Autodidac/EpochGui'
-              'Comparison: core rectangular rendering and optional rounded geometry'
+              'Features: live floating windows, right-click popups, selectable controls, rounded geometry'
+              'Input: optional EpochGui fallback enabled for this standalone demo'
+              'Window chrome: borderless replacement title bar with native move, resize, snap and commands'
               'Contents: one user-facing executable'
           ) | Set-Content -Path (Join-Path $stage 'BUILD.txt') -Encoding utf8
 
@@ -137,7 +141,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $notes = 'Windows x64 EpochGui feature gallery. It compares the same core EpochGui layouts with rectangular surfaces and the optional epoch.gui.rounded_rect geometry. The ZIP contains one executable, README.md, and BUILD.txt.'
+          $notes = 'Windows x64 live EpochGui demo with draggable and resizable floating windows, right-click context menus, selectable controls, optional rounded geometry, optional fallback input, and a borderless replacement title bar mapped to native Windows move, resize, snap, minimize, maximize, and close behavior. The ZIP contains one executable, README.md, and BUILD.txt.'
 
           gh release view $env:RELEASE_TAG *> $null
           if ($LASTEXITCODE -eq 0) {
