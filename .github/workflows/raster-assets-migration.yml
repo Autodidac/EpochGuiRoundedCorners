@@ -1,0 +1,242 @@
+name: Apply raster asset migration
+
+on:
+  push:
+    branches:
+      - agent/raster-assets
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-and-validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out demo
+        uses: actions/checkout@v4
+        with:
+          path: EpochGui_Demo
+          fetch-depth: 0
+
+      - name: Check out EpochGui migration branch
+        uses: actions/checkout@v4
+        with:
+          repository: Autodidac/EpochGui
+          ref: agent/raster-assets
+          path: EpochGui
+
+      - name: Patch demo ownership
+        shell: python
+        run: |
+          from pathlib import Path
+
+          root = Path("EpochGui_Demo")
+          renderer_path = root / "src/complete_demo_renderer.cpp"
+          source = renderer_path.read_text(encoding="utf-8")
+
+          source = source.replace("#include <cctype>\n", "")
+          source = source.replace("#include <cstdlib>\n", "")
+          source = source.replace("#include <fstream>\n", "")
+          source = source.replace(
+              "import epoch.gui.input;\n",
+              "import epoch.gui.input;\nimport epoch.gui.font;\nimport epoch.gui.image;\n")
+          source = source.replace(
+              "        namespace input = epochengine::gui_lib::input;\n",
+              "        namespace input = epochengine::gui_lib::input;\n"
+              "        namespace font = epochengine::gui_lib::font;\n"
+              "        namespace image = epochengine::gui_lib::image;\n")
+
+          start_marker = "        [[nodiscard]] constexpr std::array<std::uint8_t, 7> glyph(char character) noexcept\n"
+          end_marker = "        [[nodiscard]] GLuint compile_shader(OpenGLFunctions& gl, GLenum type, const char* source) noexcept\n"
+          begin = source.index(start_marker)
+          end = source.index(end_marker)
+          replacement = r'''        void draw_text(
+              SceneBatch& batch,
+              float x,
+              float y,
+              std::string_view text,
+              float scale,
+              Color color,
+              float maximum_width = 10000.0f)
+          {
+              float cursor_x = x;
+              float cursor_y = y;
+              for (const char character : text)
+              {
+                  if (character == '\n')
+                  {
+                      cursor_x = x;
+                      cursor_y += scale * static_cast<float>(font::line_advance);
+                      continue;
+                  }
+                  if (cursor_x + scale * static_cast<float>(font::glyph_width) > x + maximum_width)
+                      continue;
+                  if (character != ' ')
+                  {
+                      const font::BitmapGlyph glyph = font::default_glyph(character);
+                      for (std::uint32_t row = 0; row < font::glyph_height; ++row)
+                      {
+                          for (std::uint32_t column = 0; column < font::glyph_width; ++column)
+                          {
+                              if (font::pixel_on(glyph, column, row))
+                              {
+                                  batch.append_rect({
+                                      {
+                                          cursor_x + static_cast<float>(column) * scale,
+                                          cursor_y + static_cast<float>(row) * scale
+                                      },
+                                      { scale, scale }
+                                  }, color);
+                              }
+                          }
+                      }
+                  }
+                  cursor_x += scale * static_cast<float>(font::glyph_advance);
+              }
+          }
+
+          [[nodiscard]] image::Image load_demo_image()
+          {
+              constexpr std::array<std::string_view, 5> paths{
+                  "assets/epochgui_demo.ppm",
+                  "../assets/epochgui_demo.ppm",
+                  "../../assets/epochgui_demo.ppm",
+                  "../../../assets/epochgui_demo.ppm",
+                  "../../../../assets/epochgui_demo.ppm"
+              };
+              for (const std::string_view path : paths)
+              {
+                  image::ImageResult result = image::load_ppm_file(path);
+                  if (result)
+                      return std::move(result.image);
+              }
+              return {};
+          }
+
+          [[nodiscard]] constexpr Color color_from_rgba8(image::Rgba8 color) noexcept
+          {
+              constexpr float inverse_255 = 1.0f / 255.0f;
+              return {
+                  static_cast<float>(color.r) * inverse_255,
+                  static_cast<float>(color.g) * inverse_255,
+                  static_cast<float>(color.b) * inverse_255,
+                  static_cast<float>(color.a) * inverse_255
+              };
+          }
+
+          [[nodiscard]] constexpr std::string_view ppm_format_label(const image::Image& raster) noexcept
+          {
+              return raster.encoding == image::PpmEncoding::binary_p6
+                  ? "FORMAT P6 PPM"
+                  : "FORMAT P3 PPM";
+          }
+
+          void draw_image(SceneBatch& batch, const image::Image& raster, gui::Rect viewport, bool fit)
+          {
+              draw_surface(batch, viewport, true, 10.0f, background, panel_border, 1.0f);
+              if (!raster.valid())
+                  return;
+
+              const image::RasterImageLayout layout = image::make_raster_image_layout(
+                  raster,
+                  viewport,
+                  fit ? image::ImageFit::contain : image::ImageFit::stretch,
+                  12.0f);
+              if (!layout.valid)
+                  return;
+
+              for (std::uint32_t y = 0; y < raster.height; ++y)
+              {
+                  for (std::uint32_t x = 0; x < raster.width; ++x)
+                  {
+                      const image::Rgba8* pixel = raster.pixel(x, y);
+                      if (!pixel)
+                          continue;
+                      batch.append_rect(
+                          image::raster_pixel_rect(layout, x, y, 0.25f),
+                          color_from_rgba8(*pixel));
+                  }
+              }
+          }
+
+'''
+          source = source[:begin] + replacement + source[end:]
+          source = source.replace("        DemoImage demo_image{};", "        image::Image demo_image{};")
+          source = source.replace(
+              '"PPM ASSET LOADED BY THE DEMO - EPOCHGUI PROVIDES VIEW RECT AND HIT TESTING"',
+              '"PPM P3 OR P6 DECODED BY EPOCHGUI - DEMO BATCHES OPENGL PIXELS"')
+          source = source.replace("demo_image.loaded ? \"LOADED\" : \"NOT FOUND\"", "demo_image.valid() ? \"LOADED\" : \"NOT FOUND\"")
+          source = source.replace("demo_image.loaded ? green : danger", "demo_image.valid() ? green : danger")
+          source = source.replace('draw_text(batch, 944.0f, 354.0f, "FORMAT P3 PPM", 1.2f, text_secondary);',
+                                  'draw_text(batch, 944.0f, 354.0f, ppm_format_label(demo_image), 1.2f, text_secondary);')
+          source = source.replace('draw_text(batch, 944.0f, 430.0f, "ASSET LOADING", 1.2f, warning);',
+                                  'draw_text(batch, 944.0f, 430.0f, "DECODER AND FIT", 1.2f, warning);')
+          source = source.replace('draw_text(batch, 944.0f, 456.0f, "STAYS OUTSIDE", 1.2f, text_muted);',
+                                  'draw_text(batch, 944.0f, 456.0f, "LIVE IN", 1.2f, text_muted);')
+          source = source.replace('draw_text(batch, 944.0f, 482.0f, "EPOCHGUI CORE", 1.2f, text_muted);',
+                                  'draw_text(batch, 944.0f, 482.0f, "EPOCHGUI IMAGE", 1.2f, text_muted);')
+          source = source.replace('draw_text(batch, 944.0f, 536.0f, "VIEWPORT USES", 1.2f, text_secondary);',
+                                  'draw_text(batch, 944.0f, 536.0f, "OPENGL BATCHING", 1.2f, text_secondary);')
+          source = source.replace('draw_text(batch, 944.0f, 562.0f, "EPOCHGUI RECT", 1.2f, text_secondary);',
+                                  'draw_text(batch, 944.0f, 562.0f, "STAYS IN", 1.2f, text_secondary);')
+          source = source.replace('draw_text(batch, 944.0f, 588.0f, "AND CONTAINS", 1.2f, text_secondary);',
+                                  'draw_text(batch, 944.0f, 588.0f, "THE DEMO", 1.2f, text_secondary);')
+          renderer_path.write_text(source, encoding="utf-8")
+
+          cmake_path = root / "CMakeLists.txt"
+          cmake = cmake_path.read_text(encoding="utf-8")
+          cmake = cmake.replace(
+              '        AND EXISTS "${_candidate_abs}/modules/epoch.gui.input.ixx")',
+              '        AND EXISTS "${_candidate_abs}/modules/epoch.gui.input.ixx"\n'
+              '        AND EXISTS "${_candidate_abs}/modules/epoch.gui.font.ixx"\n'
+              '        AND EXISTS "${_candidate_abs}/modules/epoch.gui.image.ixx")')
+          cmake_path.write_text(cmake, encoding="utf-8")
+
+          readme_path = root / "README.md"
+          readme = readme_path.read_text(encoding="utf-8")
+          readme = readme.replace(
+              "- Runtime loading of `assets/epochgui_demo.ppm`\n"
+              "- Image display inside an EpochGui `Rect`\n"
+              "- Aspect-fit and stretch modes\n"
+              "- EpochGui layout and hit testing with file decoding and rendering kept in the demo layer\n\n"
+              "EpochGui remains backend-neutral and is not turned into an asset loader.",
+              "- Runtime loading of `assets/epochgui_demo.ppm` through `epoch.gui.image`\n"
+              "- Bounded P3 and P6 decoding into renderer-neutral RGBA8 pixels\n"
+              "- Image display inside an EpochGui `Rect`\n"
+              "- Aspect-fit and stretch layout from EpochGui\n"
+              "- OpenGL pixel batching kept in the demo layer\n\n"
+              "EpochGui owns the reusable decoder and raster layout without taking ownership of OpenGL presentation.")
+          readme = readme.replace(
+              "EpochGui owns reusable state, layout, geometry, hit testing, text editing, docking metadata, panel-host transitions, optional rounded meshes, and optional normalized fallback input.",
+              "EpochGui owns reusable state, layout, geometry, hit testing, text editing, docking metadata, panel-host transitions, the embedded bitmap font, bounded PPM decoding, raster layout, optional rounded meshes, and optional normalized fallback input.")
+          readme = readme.replace("- PPM image loading and display\n", "- OpenGL image presentation using EpochGui raster data\n")
+          readme = readme.replace("- A compact bitmap font\n", "")
+          readme_path.write_text(readme, encoding="utf-8")
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libx11-dev libgl1-mesa-dev
+
+      - name: Configure
+        run: >-
+          cmake -S EpochGui_Demo -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DEPOCHGUI_ROOT=${{ github.workspace }}/EpochGui
+          -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build --parallel 2
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Commit validated migration
+        working-directory: EpochGui_Demo
+        run: |
+          rm -f .github/workflows/raster-assets-migration.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CMakeLists.txt README.md src/complete_demo_renderer.cpp .github/workflows/raster-assets-migration.yml
+          git commit -m "Use EpochGui raster assets"
+          git push origin HEAD:agent/raster-assets
