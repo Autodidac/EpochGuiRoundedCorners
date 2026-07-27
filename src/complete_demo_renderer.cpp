@@ -2,11 +2,8 @@ module;
 
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
-#include <fstream>
 #include <memory>
 #include <span>
 #include <string>
@@ -19,6 +16,8 @@ module epoch.gui.demo.opengl;
 import epoch.gui;
 import epoch.gui.rounded_rect;
 import epoch.gui.input;
+import epoch.gui.font;
+import epoch.gui.image;
 
 namespace epochengine::gui_demo
 {
@@ -27,6 +26,8 @@ namespace epochengine::gui_demo
         namespace gui = epochengine::gui_lib;
         namespace rounded = epochengine::gui_lib::rounded_rect;
         namespace input = epochengine::gui_lib::input;
+        namespace font = epochengine::gui_lib::font;
+        namespace image = epochengine::gui_lib::image;
 
         using GLenum = unsigned int;
         using GLboolean = unsigned char;
@@ -297,59 +298,6 @@ namespace epochengine::gui_demo
             batch.append_indexed(mesh, mesh.border_indices, border);
         }
 
-        [[nodiscard]] constexpr std::array<std::uint8_t, 7> glyph(char character) noexcept
-        {
-            char c = character;
-            if (c >= 'a' && c <= 'z')
-                c = static_cast<char>(c - 'a' + 'A');
-            switch (c)
-            {
-            case 'A': return { 0b01110,0b10001,0b10001,0b11111,0b10001,0b10001,0b10001 };
-            case 'B': return { 0b11110,0b10001,0b10001,0b11110,0b10001,0b10001,0b11110 };
-            case 'C': return { 0b01111,0b10000,0b10000,0b10000,0b10000,0b10000,0b01111 };
-            case 'D': return { 0b11110,0b10001,0b10001,0b10001,0b10001,0b10001,0b11110 };
-            case 'E': return { 0b11111,0b10000,0b10000,0b11110,0b10000,0b10000,0b11111 };
-            case 'F': return { 0b11111,0b10000,0b10000,0b11110,0b10000,0b10000,0b10000 };
-            case 'G': return { 0b01111,0b10000,0b10000,0b10111,0b10001,0b10001,0b01111 };
-            case 'H': return { 0b10001,0b10001,0b10001,0b11111,0b10001,0b10001,0b10001 };
-            case 'I': return { 0b11111,0b00100,0b00100,0b00100,0b00100,0b00100,0b11111 };
-            case 'J': return { 0b00111,0b00010,0b00010,0b00010,0b10010,0b10010,0b01100 };
-            case 'K': return { 0b10001,0b10010,0b10100,0b11000,0b10100,0b10010,0b10001 };
-            case 'L': return { 0b10000,0b10000,0b10000,0b10000,0b10000,0b10000,0b11111 };
-            case 'M': return { 0b10001,0b11011,0b10101,0b10101,0b10001,0b10001,0b10001 };
-            case 'N': return { 0b10001,0b11001,0b11001,0b10101,0b10011,0b10011,0b10001 };
-            case 'O': return { 0b01110,0b10001,0b10001,0b10001,0b10001,0b10001,0b01110 };
-            case 'P': return { 0b11110,0b10001,0b10001,0b11110,0b10000,0b10000,0b10000 };
-            case 'Q': return { 0b01110,0b10001,0b10001,0b10001,0b10101,0b10010,0b01101 };
-            case 'R': return { 0b11110,0b10001,0b10001,0b11110,0b10100,0b10010,0b10001 };
-            case 'S': return { 0b01111,0b10000,0b10000,0b01110,0b00001,0b00001,0b11110 };
-            case 'T': return { 0b11111,0b00100,0b00100,0b00100,0b00100,0b00100,0b00100 };
-            case 'U': return { 0b10001,0b10001,0b10001,0b10001,0b10001,0b10001,0b01110 };
-            case 'V': return { 0b10001,0b10001,0b10001,0b10001,0b10001,0b01010,0b00100 };
-            case 'W': return { 0b10001,0b10001,0b10001,0b10101,0b10101,0b10101,0b01010 };
-            case 'X': return { 0b10001,0b10001,0b01010,0b00100,0b01010,0b10001,0b10001 };
-            case 'Y': return { 0b10001,0b10001,0b01010,0b00100,0b00100,0b00100,0b00100 };
-            case 'Z': return { 0b11111,0b00001,0b00010,0b00100,0b01000,0b10000,0b11111 };
-            case '0': return { 0b01110,0b10001,0b10011,0b10101,0b11001,0b10001,0b01110 };
-            case '1': return { 0b00100,0b01100,0b00100,0b00100,0b00100,0b00100,0b01110 };
-            case '2': return { 0b01110,0b10001,0b00001,0b00010,0b00100,0b01000,0b11111 };
-            case '3': return { 0b11110,0b00001,0b00001,0b01110,0b00001,0b00001,0b11110 };
-            case '4': return { 0b00010,0b00110,0b01010,0b10010,0b11111,0b00010,0b00010 };
-            case '5': return { 0b11111,0b10000,0b10000,0b11110,0b00001,0b00001,0b11110 };
-            case '6': return { 0b01110,0b10000,0b10000,0b11110,0b10001,0b10001,0b01110 };
-            case '7': return { 0b11111,0b00001,0b00010,0b00100,0b01000,0b01000,0b01000 };
-            case '8': return { 0b01110,0b10001,0b10001,0b01110,0b10001,0b10001,0b01110 };
-            case '9': return { 0b01110,0b10001,0b10001,0b01111,0b00001,0b00001,0b01110 };
-            case '-': return { 0,0,0,0b11111,0,0,0 };
-            case '.': return { 0,0,0,0,0,0b00110,0b00110 };
-            case ':': return { 0,0b00110,0b00110,0,0b00110,0b00110,0 };
-            case '/': return { 0b00001,0b00010,0b00010,0b00100,0b01000,0b01000,0b10000 };
-            case '_': return { 0,0,0,0,0,0,0b11111 };
-            case '+': return { 0,0b00100,0b00100,0b11111,0b00100,0b00100,0 };
-            default: return { 0,0,0,0,0,0,0 };
-            }
-        }
-
         void draw_text(
             SceneBatch& batch,
             float x,
@@ -366,161 +314,95 @@ namespace epochengine::gui_demo
                 if (character == '\n')
                 {
                     cursor_x = x;
-                    cursor_y += scale * 9.0f;
+                    cursor_y += scale * static_cast<float>(font::line_advance);
                     continue;
                 }
-                if (cursor_x + scale * 5.0f > x + maximum_width)
+                if (cursor_x + scale * static_cast<float>(font::glyph_width) > x + maximum_width)
                     continue;
                 if (character != ' ')
                 {
-                    const auto rows = glyph(character);
-                    for (std::size_t row = 0; row < rows.size(); ++row)
+                    const font::BitmapGlyph glyph = font::default_glyph(character);
+                    for (std::uint32_t row = 0; row < font::glyph_height; ++row)
                     {
-                        for (int column = 0; column < 5; ++column)
+                        for (std::uint32_t column = 0; column < font::glyph_width; ++column)
                         {
-                            const std::uint8_t mask = static_cast<std::uint8_t>(1U << (4 - column));
-                            if ((rows[row] & mask) != 0)
+                            if (font::pixel_on(glyph, column, row))
                             {
                                 batch.append_rect({
-                                    { cursor_x + static_cast<float>(column) * scale, cursor_y + static_cast<float>(row) * scale },
+                                    {
+                                        cursor_x + static_cast<float>(column) * scale,
+                                        cursor_y + static_cast<float>(row) * scale
+                                    },
                                     { scale, scale }
                                 }, color);
                             }
                         }
                     }
                 }
-                cursor_x += scale * 6.0f;
+                cursor_x += scale * static_cast<float>(font::glyph_advance);
             }
         }
 
-        struct DemoImage
+        [[nodiscard]] image::Image load_demo_image()
         {
-            int width{};
-            int height{};
-            std::vector<Color> pixels{};
-            std::string source{};
-            bool loaded{};
-        };
-
-        [[nodiscard]] bool read_ppm_token(std::istream& stream, std::string& token)
-        {
-            while (stream >> token)
-            {
-                if (!token.empty() && token.front() == '#')
-                {
-                    std::string ignored;
-                    std::getline(stream, ignored);
-                    continue;
-                }
-                return true;
-            }
-            return false;
-        }
-
-        [[nodiscard]] int parse_int(const std::string& token) noexcept
-        {
-            char* end{};
-            const long value = std::strtol(token.c_str(), &end, 10);
-            return end != token.c_str() ? static_cast<int>(value) : 0;
-        }
-
-        [[nodiscard]] bool load_ppm(const char* path, DemoImage& image)
-        {
-            std::ifstream stream(path);
-            if (!stream)
-                return false;
-
-            std::string token;
-            if (!read_ppm_token(stream, token) || token != "P3")
-                return false;
-            if (!read_ppm_token(stream, token))
-                return false;
-            const int width = parse_int(token);
-            if (!read_ppm_token(stream, token))
-                return false;
-            const int height = parse_int(token);
-            if (!read_ppm_token(stream, token))
-                return false;
-            const int maximum = (std::max)(1, parse_int(token));
-            if (width <= 0 || height <= 0 || width > 256 || height > 256)
-                return false;
-
-            std::vector<Color> pixels;
-            pixels.reserve(static_cast<std::size_t>(width * height));
-            for (int index = 0; index < width * height; ++index)
-            {
-                std::string r_token;
-                std::string g_token;
-                std::string b_token;
-                if (!read_ppm_token(stream, r_token)
-                    || !read_ppm_token(stream, g_token)
-                    || !read_ppm_token(stream, b_token))
-                {
-                    return false;
-                }
-                const float scale = 1.0f / static_cast<float>(maximum);
-                pixels.push_back({
-                    std::clamp(static_cast<float>(parse_int(r_token)) * scale, 0.0f, 1.0f),
-                    std::clamp(static_cast<float>(parse_int(g_token)) * scale, 0.0f, 1.0f),
-                    std::clamp(static_cast<float>(parse_int(b_token)) * scale, 0.0f, 1.0f),
-                    1.0f
-                });
-            }
-
-            image.width = width;
-            image.height = height;
-            image.pixels = std::move(pixels);
-            image.source = path;
-            image.loaded = true;
-            return true;
-        }
-
-        [[nodiscard]] DemoImage load_demo_image()
-        {
-            DemoImage image{};
-            constexpr std::array<const char*, 5> paths{
+            constexpr std::array<std::string_view, 5> paths{
                 "assets/epochgui_demo.ppm",
                 "../assets/epochgui_demo.ppm",
                 "../../assets/epochgui_demo.ppm",
                 "../../../assets/epochgui_demo.ppm",
                 "../../../../assets/epochgui_demo.ppm"
             };
-            for (const char* path : paths)
+            for (const std::string_view path : paths)
             {
-                if (load_ppm(path, image))
-                    break;
+                image::ImageResult result = image::load_ppm_file(path);
+                if (result)
+                    return std::move(result.image);
             }
-            return image;
+            return {};
         }
 
-        void draw_image(SceneBatch& batch, const DemoImage& image, gui::Rect viewport, bool fit)
+        [[nodiscard]] constexpr Color color_from_rgba8(image::Rgba8 color) noexcept
+        {
+            constexpr float inverse_255 = 1.0f / 255.0f;
+            return {
+                static_cast<float>(color.r) * inverse_255,
+                static_cast<float>(color.g) * inverse_255,
+                static_cast<float>(color.b) * inverse_255,
+                static_cast<float>(color.a) * inverse_255
+            };
+        }
+
+        [[nodiscard]] constexpr std::string_view ppm_format_label(const image::Image& raster) noexcept
+        {
+            return raster.encoding == image::PpmEncoding::binary_p6
+                ? "FORMAT P6 PPM"
+                : "FORMAT P3 PPM";
+        }
+
+        void draw_image(SceneBatch& batch, const image::Image& raster, gui::Rect viewport, bool fit)
         {
             draw_surface(batch, viewport, true, 10.0f, background, panel_border, 1.0f);
-            if (!image.loaded || image.width <= 0 || image.height <= 0)
+            if (!raster.valid())
                 return;
 
-            const gui::Rect inner = inset(viewport, 12.0f);
-            float pixel_width = inner.size.x / static_cast<float>(image.width);
-            float pixel_height = inner.size.y / static_cast<float>(image.height);
-            gui::Vec2 origin = inner.position;
-            if (fit)
-            {
-                const float pixel_size = (std::min)(pixel_width, pixel_height);
-                pixel_width = pixel_size;
-                pixel_height = pixel_size;
-                origin.x += (inner.size.x - pixel_width * static_cast<float>(image.width)) * 0.5f;
-                origin.y += (inner.size.y - pixel_height * static_cast<float>(image.height)) * 0.5f;
-            }
+            const image::RasterImageLayout layout = image::make_raster_image_layout(
+                raster,
+                viewport,
+                fit ? image::ImageFit::contain : image::ImageFit::stretch,
+                12.0f);
+            if (!layout.valid)
+                return;
 
-            for (int y = 0; y < image.height; ++y)
+            for (std::uint32_t y = 0; y < raster.height; ++y)
             {
-                for (int x = 0; x < image.width; ++x)
+                for (std::uint32_t x = 0; x < raster.width; ++x)
                 {
-                    const std::size_t index = static_cast<std::size_t>(y * image.width + x);
-                    batch.append_rect({
-                        { origin.x + static_cast<float>(x) * pixel_width, origin.y + static_cast<float>(y) * pixel_height },
-                        { pixel_width + 0.25f, pixel_height + 0.25f }
-                    }, image.pixels[index]);
+                    const image::Rgba8* pixel = raster.pixel(x, y);
+                    if (!pixel)
+                        continue;
+                    batch.append_rect(
+                        image::raster_pixel_rect(layout, x, y, 0.25f),
+                        color_from_rgba8(*pixel));
                 }
             }
         }
@@ -628,7 +510,7 @@ void main()
         std::string pending_text{};
         std::uint32_t active_text_control{};
 
-        DemoImage demo_image{};
+        image::Image demo_image{};
         bool image_fit{ true };
         float splitter_fraction{ 0.37f };
         std::uint32_t selected_row{ 1 };
@@ -1645,7 +1527,7 @@ void main()
         void draw_image_page(const input::InputFrame& frame)
         {
             draw_text(batch, 246.0f, 140.0f, "IMAGE LOADING AND DISPLAY", 1.8f, text_primary);
-            draw_text(batch, 246.0f, 168.0f, "PPM ASSET LOADED BY THE DEMO - EPOCHGUI PROVIDES VIEW RECT AND HIT TESTING", 1.15f, text_muted);
+            draw_text(batch, 246.0f, 168.0f, "PPM P3 OR P6 DECODED BY EPOCHGUI - DEMO BATCHES OPENGL PIXELS", 1.15f, text_muted);
             const gui::Rect toggle{ { 270.0f, 188.0f }, { 230.0f, 34.0f } };
             draw_surface(batch, toggle, true, 8.0f,
                 gui::contains(toggle, frame.pointer_position) ? control_hover : control_fill,
@@ -1658,16 +1540,16 @@ void main()
             draw_image(batch, demo_image, { { 270.0f, 242.0f }, { 620.0f, 430.0f } }, image_fit);
             draw_surface(batch, { { 920.0f, 242.0f }, { 270.0f, 430.0f } }, true, 12.0f, panel_fill, panel_border, 1.0f);
             draw_text(batch, 944.0f, 272.0f, "IMAGE STATUS", 1.45f, text_primary);
-            draw_text(batch, 944.0f, 314.0f, demo_image.loaded ? "LOADED" : "NOT FOUND", 1.45f,
-                demo_image.loaded ? green : danger);
-            draw_text(batch, 944.0f, 354.0f, "FORMAT P3 PPM", 1.2f, text_secondary);
+            draw_text(batch, 944.0f, 314.0f, demo_image.valid() ? "LOADED" : "NOT FOUND", 1.45f,
+                demo_image.valid() ? green : danger);
+            draw_text(batch, 944.0f, 354.0f, ppm_format_label(demo_image), 1.2f, text_secondary);
             draw_text(batch, 944.0f, 382.0f, "SIZE 16 X 10", 1.2f, text_secondary);
-            draw_text(batch, 944.0f, 430.0f, "ASSET LOADING", 1.2f, warning);
-            draw_text(batch, 944.0f, 456.0f, "STAYS OUTSIDE", 1.2f, text_muted);
-            draw_text(batch, 944.0f, 482.0f, "EPOCHGUI CORE", 1.2f, text_muted);
-            draw_text(batch, 944.0f, 536.0f, "VIEWPORT USES", 1.2f, text_secondary);
-            draw_text(batch, 944.0f, 562.0f, "EPOCHGUI RECT", 1.2f, text_secondary);
-            draw_text(batch, 944.0f, 588.0f, "AND CONTAINS", 1.2f, text_secondary);
+            draw_text(batch, 944.0f, 430.0f, "DECODER AND FIT", 1.2f, warning);
+            draw_text(batch, 944.0f, 456.0f, "LIVE IN", 1.2f, text_muted);
+            draw_text(batch, 944.0f, 482.0f, "EPOCHGUI IMAGE", 1.2f, text_muted);
+            draw_text(batch, 944.0f, 536.0f, "OPENGL BATCHING", 1.2f, text_secondary);
+            draw_text(batch, 944.0f, 562.0f, "STAYS IN", 1.2f, text_secondary);
+            draw_text(batch, 944.0f, 588.0f, "THE DEMO", 1.2f, text_secondary);
         }
 
         void draw_input_page(const input::InputFrame& frame)

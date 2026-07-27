@@ -5,7 +5,7 @@ project(EpochGuiDemo LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_SCAN_FOR_MODULES ON)
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 if(NOT CMAKE_GENERATOR MATCHES "Ninja|Visual Studio")
     message(FATAL_ERROR "EpochGui_Demo requires Ninja or Visual Studio for C++23 modules.")
@@ -28,7 +28,9 @@ foreach(_candidate IN LISTS _epochgui_candidates)
     if(EXISTS "${_candidate_abs}/CMakeLists.txt"
         AND EXISTS "${_candidate_abs}/modules/epoch.gui.ixx"
         AND EXISTS "${_candidate_abs}/modules/epoch.gui.rounded_rect.ixx"
-        AND EXISTS "${_candidate_abs}/modules/epoch.gui.input.ixx")
+        AND EXISTS "${_candidate_abs}/modules/epoch.gui.input.ixx"
+        AND EXISTS "${_candidate_abs}/modules/epoch.gui.font.ixx"
+        AND EXISTS "${_candidate_abs}/modules/epoch.gui.image.ixx")
         set(_epochgui_resolved_root "${_candidate_abs}")
         break()
     endif()

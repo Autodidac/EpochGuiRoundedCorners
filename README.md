@@ -39,12 +39,13 @@ The demo exercises every subsystem currently exported by the core `epoch.gui` mo
 
 ### Image
 
-- Runtime loading of `assets/epochgui_demo.ppm`
+- Runtime loading of `assets/epochgui_demo.ppm` through `epoch.gui.image`
+- Bounded P3 and P6 decoding into renderer-neutral RGBA8 pixels
 - Image display inside an EpochGui `Rect`
-- Aspect-fit and stretch modes
-- EpochGui layout and hit testing with file decoding and rendering kept in the demo layer
+- Aspect-fit and stretch layout from EpochGui
+- OpenGL pixel batching kept in the demo layer
 
-EpochGui remains backend-neutral and is not turned into an asset loader.
+EpochGui owns the reusable decoder and raster layout without taking ownership of OpenGL presentation.
 
 ### Input
 
@@ -116,17 +117,16 @@ The demo exercises public APIs for:
 
 ## Architecture
 
-EpochGui owns reusable state, layout, geometry, hit testing, text editing, docking metadata, panel-host transitions, optional rounded meshes, and optional normalized fallback input.
+EpochGui owns reusable state, layout, geometry, hit testing, text editing, docking metadata, panel-host transitions, the embedded bitmap font, bounded PPM decoding, raster layout, optional rounded meshes, and optional normalized fallback input.
 
 This repository owns:
 
 - Win32/WGL, X11/GLX, and Cocoa event translation
 - OpenGL 3.2 core presentation
 - Demo-side text-event forwarding
-- PPM image loading and display
+- OpenGL image presentation using EpochGui raster data
 - Native frame presentation and host commands
 - Windows and Linux application icons
-- A compact bitmap font
 - Build scripts and release packaging
 
 No EpochGui implementation is duplicated here.
