@@ -21,6 +21,7 @@ namespace
     constexpr int WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB = 0x0002;
     constexpr int WGL_CONTEXT_CORE_PROFILE_BIT_ARB = 0x00000001;
     constexpr UINT apply_native_frame_message = WM_APP + 1U;
+    constexpr UINT render_frame_message = WM_APP + 2U;
 
     constexpr DWORD framed_style = WS_OVERLAPPEDWINDOW;
 
@@ -124,10 +125,14 @@ namespace
             window_class.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
             window_class.lpfnWndProc = &WindowsApplication::window_proc;
             window_class.hInstance = instance_;
-            window_class.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+            window_class.hIcon = LoadIconW(instance_, MAKEINTRESOURCEW(101));
+            if (!window_class.hIcon)
+                window_class.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
             window_class.hCursor = LoadCursorW(nullptr, IDC_ARROW);
             window_class.lpszClassName = class_name;
-            window_class.hIconSm = LoadIconW(nullptr, IDI_APPLICATION);
+            window_class.hIconSm = LoadIconW(instance_, MAKEINTRESOURCEW(101));
+            if (!window_class.hIconSm)
+                window_class.hIconSm = window_class.hIcon;
 
             if (!RegisterClassExW(&window_class)
                 && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
@@ -173,7 +178,7 @@ namespace
 
             ShowWindow(window_, SW_SHOWNORMAL);
             UpdateWindow(window_);
-            render_and_apply_commands();
+            request_render();
             return true;
         }
 
@@ -274,10 +279,36 @@ namespace
             if (!window_)
                 return;
 
+            const DWMNCRENDERINGPOLICY policy = native_frame_enabled_
+                ? DWMNCRP_USEWINDOWSTYLE
+                : DWMNCRP_DISABLED;
+            DwmSetWindowAttribute(
+                window_,
+                DWMWA_NCRENDERING_POLICY,
+                &policy,
+                sizeof(policy));
+
+            BOOL allow_nc_paint = native_frame_enabled_ ? TRUE : FALSE;
+            DwmSetWindowAttribute(
+                window_,
+                DWMWA_ALLOW_NCPAINT,
+                &allow_nc_paint,
+                sizeof(allow_nc_paint));
+
             const MARGINS margins = native_frame_enabled_
                 ? MARGINS{ 0, 0, 0, 0 }
                 : MARGINS{ 1, 1, 1, 1 };
             DwmExtendFrameIntoClientArea(window_, &margins);
+
+            if (native_frame_enabled_)
+            {
+                SetWindowTheme(window_, L"Explorer", nullptr);
+                RedrawWindow(
+                    window_,
+                    nullptr,
+                    nullptr,
+                    RDW_INVALIDATE | RDW_FRAME | RDW_ERASE);
+            }
         }
 
         void update_renderer_size_from_client()
@@ -293,6 +324,15 @@ namespace
                     (std::max)(1L, client.right - client.left),
                     (std::max)(1L, client.bottom - client.top));
             }
+        }
+
+        void request_render()
+        {
+            if (!window_ || graphics_shutdown_ || render_message_pending_)
+                return;
+            render_message_pending_ = true;
+            if (!PostMessageW(window_, render_frame_message, 0, 0))
+                render_message_pending_ = false;
         }
 
         void request_native_frame_mode(bool enabled)
@@ -338,7 +378,7 @@ namespace
 
             update_renderer_size_from_client();
             frame_change_in_progress_ = false;
-            InvalidateRect(window_, nullptr, FALSE);
+            request_render();
         }
 
         void update_modifiers()
@@ -387,7 +427,7 @@ namespace
                 ShowWindow(window_, IsZoomed(window_) ? SW_RESTORE : SW_MAXIMIZE);
                 break;
             case EPOCH_GUI_DEMO_COMMAND_CLOSE:
-                SendMessageW(window_, WM_CLOSE, 0, 0);
+                PostMessageW(window_, WM_CLOSE, 0, 0);
                 break;
             default:
                 break;
@@ -417,7 +457,7 @@ namespace
                 SetCapture(window_);
             else if (GetCapture() == window_)
                 ReleaseCapture();
-            render_and_apply_commands();
+            request_render();
         }
 
         void feed_character(wchar_t character)
@@ -439,7 +479,7 @@ namespace
                 return;
             utf8[static_cast<std::size_t>(written)] = '\0';
             epoch_gui_demo_text_input(renderer_, utf8.data());
-            render_and_apply_commands();
+            request_render();
         }
 
         [[nodiscard]] LRESULT handle_message(
@@ -450,6 +490,11 @@ namespace
         {
             switch (message)
             {
+            case render_frame_message:
+                render_message_pending_ = false;
+                render_and_apply_commands();
+                return 0;
+
             case apply_native_frame_message:
                 frame_change_message_pending_ = false;
                 apply_native_frame_mode(pending_native_frame_enabled_);
@@ -516,13 +561,13 @@ namespace
                         renderer_,
                         (std::max)(1, static_cast<int>(LOWORD(lparam))),
                         (std::max)(1, static_cast<int>(HIWORD(lparam))));
-                    InvalidateRect(window_, nullptr, FALSE);
+                    request_render();
                 }
                 return 0;
 
             case WM_MOUSEMOVE:
                 feed_pointer_position(lparam);
-                render_and_apply_commands();
+                request_render();
                 return 0;
 
             case WM_LBUTTONDOWN:
@@ -553,7 +598,7 @@ namespace
                     renderer_,
                     0.0f,
                     static_cast<float>(GET_WHEEL_DELTA_WPARAM(wparam)) / static_cast<float>(WHEEL_DELTA));
-                render_and_apply_commands();
+                request_render();
                 return 0;
             }
 
@@ -573,7 +618,7 @@ namespace
                     const bool repeated = down && (lparam & (1LL << 30)) != 0;
                     epoch_gui_demo_key_event(renderer_, key, down, repeated);
                     update_modifiers();
-                    render_and_apply_commands();
+                    request_render();
                     return 0;
                 }
                 break;
@@ -632,6 +677,7 @@ namespace
         bool pending_native_frame_enabled_{ true };
         bool frame_change_message_pending_{};
         bool frame_change_in_progress_{};
+        bool render_message_pending_{};
         bool rendering_{};
         bool graphics_shutdown_{};
     };
