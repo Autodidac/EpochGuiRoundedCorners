@@ -131,7 +131,7 @@ elseif(UNIX)
     find_package(X11 REQUIRED)
 
     add_executable(epoch_gui_demo_app
-        src/platform/linux_glx_main.cpp
+        src/platform/complete_linux_glx_main.cpp
     )
 
     target_link_libraries(epoch_gui_demo_app PRIVATE
