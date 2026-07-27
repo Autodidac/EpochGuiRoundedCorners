@@ -147,6 +147,7 @@ namespace
         [[nodiscard]] int run()
         {
             bool running = true;
+            bool animation_final_frame_drawn = false;
 
             const auto handle_event = [this, &running](XEvent& event)
             {
@@ -185,6 +186,12 @@ namespace
             {
                 if (epoch_gui_demo_startup_animation_complete(renderer_))
                 {
+                    if (!animation_final_frame_drawn)
+                    {
+                        render();
+                        animation_final_frame_drawn = true;
+                    }
+
                     XEvent event{};
                     XNextEvent(display_, &event);
                     handle_event(event);
