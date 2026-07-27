@@ -88,8 +88,8 @@ namespace
                 RootWindow(display_, visual->screen),
                 0,
                 0,
-                960,
-                620,
+                1280,
+                820,
                 0,
                 visual->depth,
                 InputOutput,
@@ -100,7 +100,7 @@ namespace
             if (!window_)
                 return false;
 
-            XStoreName(display_, window_, "EpochGUI Rounded Corners - OpenGL");
+            XStoreName(display_, window_, "EpochGui Demo - Core and Optional Features");
             delete_message_ = XInternAtom(display_, "WM_DELETE_WINDOW", False);
             XSetWMProtocols(display_, window_, &delete_message_, 1);
 
@@ -135,7 +135,7 @@ namespace
             if (!renderer_ || !epoch_gui_demo_initialize(renderer_, &load_opengl_proc))
                 return false;
 
-            epoch_gui_demo_resize(renderer_, 960, 620);
+            epoch_gui_demo_resize(renderer_, 1280, 820);
             XMapWindow(display_, window_);
             XFlush(display_);
             return true;
