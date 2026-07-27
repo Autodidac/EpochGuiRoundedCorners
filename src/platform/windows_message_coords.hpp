@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <windows.h>
 
 #ifndef GET_X_LPARAM
