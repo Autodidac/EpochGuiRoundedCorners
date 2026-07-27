@@ -7,9 +7,6 @@
 
 #include "epochgui_demo/app_bridge.hpp"
 
-#include <chrono>
-#include <thread>
-
 namespace
 {
     constexpr int GLX_CONTEXT_MAJOR_VERSION_ARB = 0x2091;
@@ -147,10 +144,11 @@ namespace
         [[nodiscard]] int run()
         {
             bool running = true;
-            bool animation_final_frame_drawn = false;
-
-            const auto handle_event = [this, &running](XEvent& event)
+            while (running)
             {
+                XEvent event{};
+                XNextEvent(display_, &event);
+
                 switch (event.type)
                 {
                 case Expose:
@@ -180,33 +178,6 @@ namespace
                 default:
                     break;
                 }
-            };
-
-            while (running)
-            {
-                if (epoch_gui_demo_startup_animation_complete(renderer_))
-                {
-                    if (!animation_final_frame_drawn)
-                    {
-                        render();
-                        animation_final_frame_drawn = true;
-                    }
-
-                    XEvent event{};
-                    XNextEvent(display_, &event);
-                    handle_event(event);
-                    continue;
-                }
-
-                while (XPending(display_) > 0)
-                {
-                    XEvent event{};
-                    XNextEvent(display_, &event);
-                    handle_event(event);
-                }
-
-                render();
-                std::this_thread::sleep_for(std::chrono::milliseconds{ 16 });
             }
 
             return 0;
