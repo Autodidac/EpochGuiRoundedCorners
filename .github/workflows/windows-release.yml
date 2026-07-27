@@ -11,7 +11,6 @@ on:
       - include/**
       - modules/**
       - src/**
-      - tests/**
       - .github/workflows/windows-release.yml
   workflow_dispatch:
 
@@ -31,12 +30,12 @@ jobs:
       - name: Check out rounded-corner demo
         uses: actions/checkout@v4
 
-      - name: Check out EpochEngine
+      - name: Check out EpochGui
         uses: actions/checkout@v4
         with:
-          repository: Autodidac/EpochEngine
+          repository: Autodidac/EpochGui
           ref: main
-          path: EpochEngine
+          path: EpochGui
 
       - name: Configure
         shell: pwsh
@@ -45,13 +44,13 @@ jobs:
           -G "Visual Studio 17 2022"
           -A x64
           -DBUILD_TESTING=ON
-          -DEPOCH_ENGINE_ROOT="${{ github.workspace }}/EpochEngine/Engine"
+          -DEPOCHGUI_ROOT="${{ github.workspace }}/EpochGui"
 
       - name: Build
         shell: pwsh
         run: cmake --build build --config Release --parallel
 
-      - name: Run geometry contract test
+      - name: Run EpochGui tests
         shell: pwsh
         run: ctest --test-dir build -C Release --output-on-failure
 
@@ -89,6 +88,7 @@ jobs:
               'Platform: Windows x64'
               'Compiler: MSVC'
               'Renderer: OpenGL 3.2 core through native Win32/WGL'
+              'Geometry source: Autodidac/EpochGui optional epoch.gui.rounded_rect module'
               'Contents: one user-facing executable'
           ) | Set-Content -Path (Join-Path $stage 'BUILD.txt') -Encoding utf8
 
@@ -131,7 +131,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $notes = 'Windows x64 OpenGL 3.2 core demo packaged as a ZIP. The archive contains exactly one application executable, README.md, and BUILD.txt. The geometry validator remains CI-only.'
+          $notes = 'Windows x64 OpenGL demo of the optional rounded-rectangle geometry supplied by Autodidac/EpochGui. The ZIP contains exactly one application executable, README.md, and BUILD.txt.'
 
           gh release view $env:RELEASE_TAG *> $null
           if ($LASTEXITCODE -eq 0) {
