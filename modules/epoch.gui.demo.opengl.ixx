@@ -1,6 +1,7 @@
 module;
 
 #include <memory>
+#include <string_view>
 
 export module epoch.gui.demo.opengl;
 
@@ -38,10 +39,12 @@ export namespace epochengine::gui_demo
         void wheel(float horizontal, float vertical) noexcept;
         void key(Key key_code, bool down, bool repeated = false) noexcept;
         void modifiers(input::ModifierState state) noexcept;
+        void text_input(std::string_view text);
         void render() noexcept;
 
         [[nodiscard]] WindowChromeRegion window_chrome_hit_test(float x, float y) const noexcept;
         [[nodiscard]] WindowCommand take_window_command() noexcept;
+        [[nodiscard]] int take_native_frame_mode() noexcept;
 
     private:
         struct Impl;
