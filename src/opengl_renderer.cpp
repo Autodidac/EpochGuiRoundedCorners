@@ -528,9 +528,4 @@ void main()
         if (impl_)
             impl_->render();
     }
-
-    bool OpenGLRenderer::startup_animation_complete() const noexcept
-    {
-        return true;
-    }
 }
