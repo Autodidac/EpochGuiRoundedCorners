@@ -11,12 +11,46 @@ namespace
     {
         return reinterpret_cast<epoch_gui_demo_gl_proc>(dlsym(RTLD_DEFAULT, name));
     }
+
+    [[nodiscard]] int key_from_code(unsigned short code) noexcept
+    {
+        switch (code)
+        {
+        case 53: return EPOCH_GUI_DEMO_KEY_ESCAPE;
+        case 36: return EPOCH_GUI_DEMO_KEY_ENTER;
+        case 48: return EPOCH_GUI_DEMO_KEY_TAB;
+        case 49: return EPOCH_GUI_DEMO_KEY_SPACE;
+        case 51: return EPOCH_GUI_DEMO_KEY_BACKSPACE;
+        case 117: return EPOCH_GUI_DEMO_KEY_DELETE;
+        case 123: return EPOCH_GUI_DEMO_KEY_LEFT;
+        case 124: return EPOCH_GUI_DEMO_KEY_RIGHT;
+        case 126: return EPOCH_GUI_DEMO_KEY_UP;
+        case 125: return EPOCH_GUI_DEMO_KEY_DOWN;
+        case 115: return EPOCH_GUI_DEMO_KEY_HOME;
+        case 119: return EPOCH_GUI_DEMO_KEY_END;
+        case 56:
+        case 60:
+            return EPOCH_GUI_DEMO_KEY_SHIFT;
+        case 59:
+        case 62:
+            return EPOCH_GUI_DEMO_KEY_CONTROL;
+        case 58:
+        case 61:
+            return EPOCH_GUI_DEMO_KEY_ALT;
+        case 54:
+        case 55:
+            return EPOCH_GUI_DEMO_KEY_SUPER;
+        default:
+            return -1;
+        }
+    }
 }
 
 @interface EpochOpenGLView : NSOpenGLView
 {
     epoch_gui_demo_renderer* renderer_;
 }
+- (void)renderAndApplyCommands;
 @end
 
 @implementation EpochOpenGLView
@@ -56,6 +90,7 @@ namespace
         return;
     }
 
+    [[self window] setAcceptsMouseMovedEvents:YES];
     [self reshape];
 }
 
@@ -72,12 +107,65 @@ namespace
     [self setNeedsDisplay:YES];
 }
 
-- (void)drawRect:(NSRect)dirtyRect
+- (NSPoint)rendererPointForEvent:(NSEvent*)event
 {
-    (void)dirtyRect;
+    const NSPoint local = [self convertPoint:[event locationInWindow] fromView:nil];
+    const NSPoint backing = [self convertPointToBacking:local];
+    const NSRect backingBounds = [self convertRectToBacking:[self bounds]];
+    return NSMakePoint(backing.x, backingBounds.size.height - backing.y);
+}
+
+- (void)feedPointer:(NSEvent*)event
+{
+    if (!renderer_)
+        return;
+    const NSPoint point = [self rendererPointForEvent:event];
+    epoch_gui_demo_pointer_move(
+        renderer_,
+        static_cast<float>(point.x),
+        static_cast<float>(point.y));
+}
+
+- (void)feedModifiers:(NSEvent*)event
+{
+    const NSEventModifierFlags flags = [event modifierFlags];
+    epoch_gui_demo_modifiers(
+        renderer_,
+        (flags & NSEventModifierFlagShift) != 0,
+        (flags & NSEventModifierFlagControl) != 0,
+        (flags & NSEventModifierFlagOption) != 0,
+        (flags & NSEventModifierFlagCommand) != 0);
+}
+
+- (void)renderAndApplyCommands
+{
+    if (!renderer_)
+        return;
+
     [[self openGLContext] makeCurrentContext];
     epoch_gui_demo_render(renderer_);
     [[self openGLContext] flushBuffer];
+
+    switch (epoch_gui_demo_take_window_command(renderer_))
+    {
+    case EPOCH_GUI_DEMO_COMMAND_MINIMIZE:
+        [[self window] miniaturize:nil];
+        break;
+    case EPOCH_GUI_DEMO_COMMAND_TOGGLE_MAXIMIZE:
+        [[self window] zoom:nil];
+        break;
+    case EPOCH_GUI_DEMO_COMMAND_CLOSE:
+        [[self window] close];
+        break;
+    default:
+        break;
+    }
+}
+
+- (void)drawRect:(NSRect)dirtyRect
+{
+    (void)dirtyRect;
+    [self renderAndApplyCommands];
 }
 
 - (BOOL)acceptsFirstResponder
@@ -85,12 +173,129 @@ namespace
     return YES;
 }
 
+- (void)mouseMoved:(NSEvent*)event
+{
+    [self feedPointer:event];
+    [self renderAndApplyCommands];
+}
+
+- (void)mouseDragged:(NSEvent*)event
+{
+    [self feedPointer:event];
+    [self renderAndApplyCommands];
+}
+
+- (void)rightMouseDragged:(NSEvent*)event
+{
+    [self feedPointer:event];
+    [self renderAndApplyCommands];
+}
+
+- (void)otherMouseDragged:(NSEvent*)event
+{
+    [self feedPointer:event];
+    [self renderAndApplyCommands];
+}
+
+- (void)mouseDown:(NSEvent*)event
+{
+    [self feedPointer:event];
+    const NSPoint point = [self rendererPointForEvent:event];
+    const int region = epoch_gui_demo_window_hit_test(
+        renderer_,
+        static_cast<float>(point.x),
+        static_cast<float>(point.y));
+
+    if (region == EPOCH_GUI_DEMO_WINDOW_CAPTION)
+    {
+        [[self window] performWindowDragWithEvent:event];
+        [self renderAndApplyCommands];
+        return;
+    }
+
+    epoch_gui_demo_pointer_button(renderer_, EPOCH_GUI_DEMO_POINTER_LEFT, true);
+    [self renderAndApplyCommands];
+}
+
+- (void)mouseUp:(NSEvent*)event
+{
+    [self feedPointer:event];
+    epoch_gui_demo_pointer_button(renderer_, EPOCH_GUI_DEMO_POINTER_LEFT, false);
+    [self renderAndApplyCommands];
+}
+
+- (void)rightMouseDown:(NSEvent*)event
+{
+    [self feedPointer:event];
+    epoch_gui_demo_pointer_button(renderer_, EPOCH_GUI_DEMO_POINTER_RIGHT, true);
+    [self renderAndApplyCommands];
+}
+
+- (void)rightMouseUp:(NSEvent*)event
+{
+    [self feedPointer:event];
+    epoch_gui_demo_pointer_button(renderer_, EPOCH_GUI_DEMO_POINTER_RIGHT, false);
+    [self renderAndApplyCommands];
+}
+
+- (void)otherMouseDown:(NSEvent*)event
+{
+    [self feedPointer:event];
+    epoch_gui_demo_pointer_button(renderer_, EPOCH_GUI_DEMO_POINTER_MIDDLE, true);
+    [self renderAndApplyCommands];
+}
+
+- (void)otherMouseUp:(NSEvent*)event
+{
+    [self feedPointer:event];
+    epoch_gui_demo_pointer_button(renderer_, EPOCH_GUI_DEMO_POINTER_MIDDLE, false);
+    [self renderAndApplyCommands];
+}
+
+- (void)scrollWheel:(NSEvent*)event
+{
+    [self feedPointer:event];
+    epoch_gui_demo_wheel(
+        renderer_,
+        static_cast<float>([event scrollingDeltaX]),
+        static_cast<float>([event scrollingDeltaY]));
+    [self renderAndApplyCommands];
+}
+
 - (void)keyDown:(NSEvent*)event
 {
-    if ([event keyCode] == 53)
-        [[self window] close];
+    const int key = key_from_code([event keyCode]);
+    if (key >= 0)
+    {
+        epoch_gui_demo_key_event(renderer_, key, true, [event isARepeat]);
+        [self feedModifiers:event];
+        [self renderAndApplyCommands];
+    }
     else
+    {
         [super keyDown:event];
+    }
+}
+
+- (void)keyUp:(NSEvent*)event
+{
+    const int key = key_from_code([event keyCode]);
+    if (key >= 0)
+    {
+        epoch_gui_demo_key_event(renderer_, key, false, false);
+        [self feedModifiers:event];
+        [self renderAndApplyCommands];
+    }
+    else
+    {
+        [super keyUp:event];
+    }
+}
+
+- (void)flagsChanged:(NSEvent*)event
+{
+    [self feedModifiers:event];
+    [self renderAndApplyCommands];
 }
 
 - (void)dealloc
@@ -118,20 +323,23 @@ namespace
     const NSRect frame = NSMakeRect(0.0, 0.0, 1280.0, 820.0);
     window_ = [[NSWindow alloc]
         initWithContentRect:frame
-        styleMask:(NSWindowStyleMaskTitled
-            | NSWindowStyleMaskClosable
-            | NSWindowStyleMaskMiniaturizable
-            | NSWindowStyleMaskResizable)
+        styleMask:(NSWindowStyleMaskBorderless
+            | NSWindowStyleMaskResizable
+            | NSWindowStyleMaskMiniaturizable)
         backing:NSBackingStoreBuffered
         defer:NO];
 
-    [window_ setTitle:@"EpochGui Demo - Core and Optional Features"];
+    [window_ setTitle:@"EpochGui Live Demo"];
     [window_ setDelegate:self];
+    [window_ setOpaque:YES];
+    [window_ setHasShadow:YES];
+    [window_ setMovableByWindowBackground:NO];
     [window_ center];
 
     EpochOpenGLView* view = [[EpochOpenGLView alloc] initWithFrame:frame];
     [view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     [window_ setContentView:view];
+    [window_ makeFirstResponder:view];
     [view release];
 
     [window_ makeKeyAndOrderFront:nil];
@@ -167,6 +375,5 @@ int main(int argc, const char* argv[])
         [application run];
         [delegate release];
     }
-
     return 0;
 }
