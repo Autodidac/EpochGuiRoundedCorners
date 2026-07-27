@@ -19,6 +19,7 @@ namespace
     constexpr int WGL_CONTEXT_PROFILE_MASK_ARB = 0x9126;
     constexpr int WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB = 0x0002;
     constexpr int WGL_CONTEXT_CORE_PROFILE_BIT_ARB = 0x00000001;
+    constexpr UINT apply_native_frame_message = WM_APP + 1U;
 
     constexpr DWORD framed_style = WS_OVERLAPPEDWINDOW;
     constexpr DWORD borderless_style = WS_POPUP
@@ -172,9 +173,7 @@ namespace
             if (!renderer_ || !epoch_gui_demo_initialize(renderer_, &load_opengl_proc))
                 return false;
 
-            RECT client{};
-            GetClientRect(window_, &client);
-            epoch_gui_demo_resize(renderer_, client.right - client.left, client.bottom - client.top);
+            update_renderer_size_from_client();
 
             ShowWindow(window_, SW_SHOWNORMAL);
             UpdateWindow(window_);
@@ -276,20 +275,70 @@ namespace
 
         void apply_dwm_frame()
         {
+            if (!window_)
+                return;
+
             const MARGINS margins = native_frame_enabled_
                 ? MARGINS{ 0, 0, 0, 0 }
                 : MARGINS{ 1, 1, 1, 1 };
             DwmExtendFrameIntoClientArea(window_, &margins);
         }
 
-        void apply_native_frame_mode(bool enabled)
+        void update_renderer_size_from_client()
         {
-            if (native_frame_enabled_ == enabled || !window_)
+            if (!renderer_ || !window_)
                 return;
 
+            RECT client{};
+            if (GetClientRect(window_, &client))
+            {
+                epoch_gui_demo_resize(
+                    renderer_,
+                    (std::max)(1L, client.right - client.left),
+                    (std::max)(1L, client.bottom - client.top));
+            }
+        }
+
+        void request_native_frame_mode(bool enabled)
+        {
+            if (!window_ || graphics_shutdown_)
+                return;
+
+            pending_native_frame_enabled_ = enabled;
+            if (frame_change_message_pending_)
+                return;
+
+            frame_change_message_pending_ = true;
+            if (!PostMessageW(window_, apply_native_frame_message, 0, 0))
+                frame_change_message_pending_ = false;
+        }
+
+        void apply_native_frame_mode(bool enabled)
+        {
+            if (!window_
+                || graphics_shutdown_
+                || frame_change_in_progress_
+                || native_frame_enabled_ == enabled)
+            {
+                return;
+            }
+
+            frame_change_in_progress_ = true;
+            const bool previous_mode = native_frame_enabled_;
             native_frame_enabled_ = enabled;
-            const LONG_PTR style = static_cast<LONG_PTR>(enabled ? framed_style : borderless_style);
-            SetWindowLongPtrW(window_, GWL_STYLE, style);
+
+            SetLastError(ERROR_SUCCESS);
+            const LONG_PTR previous_style = SetWindowLongPtrW(
+                window_,
+                GWL_STYLE,
+                static_cast<LONG_PTR>(enabled ? framed_style : borderless_style));
+            if (previous_style == 0 && GetLastError() != ERROR_SUCCESS)
+            {
+                native_frame_enabled_ = previous_mode;
+                frame_change_in_progress_ = false;
+                return;
+            }
+
             apply_dwm_frame();
             SetWindowPos(
                 window_,
@@ -298,8 +347,19 @@ namespace
                 0,
                 0,
                 0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-            InvalidateRect(window_, nullptr, FALSE);
+                SWP_NOMOVE
+                    | SWP_NOSIZE
+                    | SWP_NOZORDER
+                    | SWP_NOACTIVATE
+                    | SWP_FRAMECHANGED);
+
+            update_renderer_size_from_client();
+            frame_change_in_progress_ = false;
+            RedrawWindow(
+                window_,
+                nullptr,
+                nullptr,
+                RDW_INVALIDATE | RDW_FRAME | RDW_UPDATENOW);
         }
 
         void update_modifiers()
@@ -316,13 +376,23 @@ namespace
 
         void render_and_apply_commands()
         {
-            if (!renderer_ || !device_context_)
+            if (!renderer_
+                || !device_context_
+                || rendering_
+                || frame_change_in_progress_
+                || graphics_shutdown_)
+            {
                 return;
+            }
 
+            rendering_ = true;
             epoch_gui_demo_render(renderer_);
             SwapBuffers(device_context_);
+            const int window_command = epoch_gui_demo_take_window_command(renderer_);
+            const int frame_mode = epoch_gui_demo_take_native_frame_mode(renderer_);
+            rendering_ = false;
 
-            switch (epoch_gui_demo_take_window_command(renderer_))
+            switch (window_command)
             {
             case EPOCH_GUI_DEMO_COMMAND_MINIMIZE:
                 ShowWindow(window_, SW_MINIMIZE);
@@ -337,11 +407,10 @@ namespace
                 break;
             }
 
-            const int frame_mode = epoch_gui_demo_take_native_frame_mode(renderer_);
             if (frame_mode == EPOCH_GUI_DEMO_FRAME_MODE_NATIVE)
-                apply_native_frame_mode(true);
+                request_native_frame_mode(true);
             else if (frame_mode == EPOCH_GUI_DEMO_FRAME_MODE_BORDERLESS)
-                apply_native_frame_mode(false);
+                request_native_frame_mode(false);
         }
 
         void feed_pointer_position(LPARAM lparam)
@@ -395,6 +464,11 @@ namespace
         {
             switch (message)
             {
+            case apply_native_frame_message:
+                frame_change_message_pending_ = false;
+                apply_native_frame_mode(pending_native_frame_enabled_);
+                return 0;
+
             case WM_NCCALCSIZE:
                 if (!native_frame_enabled_ && wparam != 0)
                     return 0;
@@ -402,6 +476,9 @@ namespace
 
             case WM_NCHITTEST:
             {
+                if (frame_change_in_progress_)
+                    return DefWindowProcW(window, message, wparam, lparam);
+
                 if (native_frame_enabled_)
                 {
                     const LRESULT native_result = DefWindowProcW(window, message, wparam, lparam);
@@ -441,9 +518,9 @@ namespace
                 {
                     epoch_gui_demo_resize(
                         renderer_,
-                        static_cast<int>(LOWORD(lparam)),
-                        static_cast<int>(HIWORD(lparam)));
-                    render_and_apply_commands();
+                        (std::max)(1, static_cast<int>(LOWORD(lparam))),
+                        (std::max)(1, static_cast<int>(HIWORD(lparam))));
+                    InvalidateRect(window_, nullptr, FALSE);
                 }
                 return 0;
 
@@ -556,6 +633,10 @@ namespace
         HGLRC render_context_{};
         epoch_gui_demo_renderer* renderer_{};
         bool native_frame_enabled_{ true };
+        bool pending_native_frame_enabled_{ true };
+        bool frame_change_message_pending_{};
+        bool frame_change_in_progress_{};
+        bool rendering_{};
         bool graphics_shutdown_{};
     };
 }
