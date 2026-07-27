@@ -18,6 +18,7 @@ on:
       - open_msvc.ps1
       - build_linux.sh
       - .github/workflows/windows-release.yml
+      - .github/workflows/linux-release.yml
   workflow_dispatch:
 
 permissions:
@@ -105,9 +106,12 @@ jobs:
               'Renderer: OpenGL 3.2 core through native Win32/WGL'
               'Library: Autodidac/EpochGui'
               'Coverage: every currently exported EpochGui subsystem'
-              'Features: floating windows, docking, dockable windows, panel hosting, popups, text controls, static text, image loading/display, progress, splitters, lists and segmented controls'
+              'Features: floating windows, docking, dockable windows, panel hosting, popups, text controls, static text, image loading/display, progress, captured splitters, lists and segmented controls'
               'Input: optional EpochGui fallback enabled only for this standalone demo'
-              'Window chrome: custom EpochGui title bar always visible; native outer frame enabled by default and toggleable at runtime'
+              'Window chrome: custom EpochGui title bar always visible; current Windows theme restored when native frame is re-enabled'
+              'Responsiveness: pointer and resize events are coalesced before OpenGL rendering'
+              'Icon: embedded EpochGui Demo application icon'
+              'Linux: the follow-up Linux workflow attaches a matching x64 tar.gz to this release'
               'Contents: one user-facing executable plus the demo image asset'
           ) | Set-Content -Path (Join-Path $stage 'BUILD.txt') -Encoding utf8
 
@@ -119,6 +123,9 @@ jobs:
           $versionInfo = $stagedExecutables[0].VersionInfo
           if ($versionInfo.ProductName -ne 'EpochGui Demo') {
               throw 'Windows product metadata is missing or incorrect.'
+          }
+          if ($versionInfo.ProductVersion -notlike "$version*") {
+              throw "Windows product version does not match VERSION: $($versionInfo.ProductVersion)"
           }
 
           Compress-Archive -Path "$stage\*" -DestinationPath $zip -CompressionLevel Optimal
@@ -153,7 +160,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $notes = 'Windows x64 complete EpochGui catalog. The custom EpochGui title bar is always visible, while the native outer frame is enabled by default and can be toggled to borderless mode. Floating-window close/reopen behavior is fixed. The demo covers all currently exported EpochGui subsystems and includes editable text, read-only static text, and bundled image loading/display. The ZIP contains one executable, README.md, BUILD.txt, and the image asset.'
+          $notes = 'Cross-platform EpochGui interactive catalog. Windows restores the current modern DWM title-bar theme after leaving borderless mode, includes an embedded application icon, coalesces input-driven rendering to prevent lockups, and keeps splitter drag capture until release. The Windows ZIP is published first; the Linux workflow then attaches a matching Linux x64 tar.gz and checksum.'
 
           gh release view $env:RELEASE_TAG *> $null
           if ($LASTEXITCODE -eq 0) {
