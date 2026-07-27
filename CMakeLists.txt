@@ -27,7 +27,8 @@ foreach(_candidate IN LISTS _epochgui_candidates)
     get_filename_component(_candidate_abs "${_candidate}" ABSOLUTE)
     if(EXISTS "${_candidate_abs}/CMakeLists.txt"
         AND EXISTS "${_candidate_abs}/modules/epoch.gui.ixx"
-        AND EXISTS "${_candidate_abs}/modules/epoch.gui.rounded_rect.ixx")
+        AND EXISTS "${_candidate_abs}/modules/epoch.gui.rounded_rect.ixx"
+        AND EXISTS "${_candidate_abs}/modules/epoch.gui.input.ixx")
         set(_epochgui_resolved_root "${_candidate_abs}")
         break()
     endif()
@@ -35,7 +36,7 @@ endforeach()
 
 if(NOT _epochgui_resolved_root)
     message(FATAL_ERROR
-        "Standalone EpochGui with optional rounded-rectangle support was not found. "
+        "Standalone EpochGui with rounded rectangles and fallback input was not found. "
         "Pass -DEPOCHGUI_ROOT=<path-to-Autodidac/EpochGui>.")
 endif()
 
@@ -45,8 +46,11 @@ set(EPOCHGUI_SOURCE_ROOT "${EPOCHGUI_ROOT}" CACHE PATH
     "EpochGui source root used by the demo" FORCE)
 set(EPOCHGUI_ENABLE_ROUNDED_RECT ON CACHE BOOL
     "Enable optional EpochGui rounded-rectangle geometry for comparison" FORCE)
+set(EPOCHGUI_ENABLE_INPUT ON CACHE BOOL
+    "Enable optional EpochGui fallback input for this standalone demo" FORCE)
 
 message(STATUS "EpochGui root: ${EPOCHGUI_ROOT}")
+message(STATUS "EpochGui fallback input: enabled for demo")
 
 add_subdirectory(
     "${EPOCHGUI_ROOT}"
@@ -54,7 +58,7 @@ add_subdirectory(
 )
 
 add_library(epoch_gui_demo_renderer STATIC
-    src/opengl_renderer.cpp
+    src/live_renderer.cpp
     src/app_bridge.cpp
 )
 
@@ -92,6 +96,7 @@ if(WIN32)
 
     target_link_libraries(epoch_gui_demo_app PRIVATE
         epoch_gui_demo_renderer
+        dwmapi
         opengl32
     )
 elseif(APPLE)
