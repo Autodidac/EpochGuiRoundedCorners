@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: epochgui-demo-linux-${{ github.event.workflow_run.head_sha || github.sha }}
@@ -38,6 +39,40 @@ jobs:
         with:
           ref: ${{ steps.revision.outputs.sha }}
 
+      - name: Open Linux release status
+        id: status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          title="EpochGui Demo Linux release status v${version}"
+          body_path="${RUNNER_TEMP}/linux-status.md"
+
+          cat > "$body_path" <<EOF
+          Linux x64 release verification started for commit \\`${{ steps.revision.outputs.sha }}\`.
+
+          This issue closes only after the Linux archive and SHA-256 checksum are attached to the matching GitHub release.
+          EOF
+
+          issue_number="$(gh issue list \
+            --state all \
+            --search 'EpochGui Demo Linux release status in:title' \
+            --json number \
+            --jq '.[0].number')"
+
+          if [[ -n "$issue_number" ]]; then
+            gh issue reopen "$issue_number" >/dev/null 2>&1 || true
+            gh issue edit "$issue_number" --title "$title" --body-file "$body_path"
+          else
+            issue_url="$(gh issue create --title "$title" --body-file "$body_path")"
+            issue_number="${issue_url##*/}"
+          fi
+
+          echo "number=$issue_number" >> "$GITHUB_OUTPUT"
+          echo "LINUX_STATUS_ISSUE=$issue_number" >> "$GITHUB_ENV"
+
       - name: Check out EpochGui
         uses: actions/checkout@v4
         with:
@@ -61,21 +96,57 @@ jobs:
       - name: Configure
         shell: bash
         run: |
+          set -o pipefail
           cmake -S . -B build/linux-release -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER=clang++-18 \
             -DBUILD_TESTING=ON \
             -DEPOCHGUI_ENABLE_ROUNDED_RECT=ON \
             -DEPOCHGUI_ENABLE_INPUT=ON \
-            -DEPOCHGUI_ROOT="${GITHUB_WORKSPACE}/EpochGui"
+            -DEPOCHGUI_ROOT="${GITHUB_WORKSPACE}/EpochGui" \
+            2>&1 | tee configure-output.log
 
       - name: Build
         shell: bash
-        run: cmake --build build/linux-release --parallel
+        run: |
+          set -o pipefail
+          cmake --build build/linux-release --parallel \
+            2>&1 | tee build-output.log
 
       - name: Run EpochGui tests
         shell: bash
-        run: ctest --test-dir build/linux-release --output-on-failure
+        run: |
+          set -o pipefail
+          ctest --test-dir build/linux-release --output-on-failure \
+            2>&1 | tee test-output.log
+
+      - name: Publish Linux failure diagnostic
+        if: failure() && env.LINUX_STATUS_ISSUE != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          body_path="${RUNNER_TEMP}/linux-failure.md"
+          {
+            echo "Linux x64 release verification failed for commit \`${{ steps.revision.outputs.sha }}\`."
+            echo
+            for entry in \
+              "Configure:configure-output.log" \
+              "Build:build-output.log" \
+              "Tests:test-output.log"; do
+              name="${entry%%:*}"
+              path="${entry#*:}"
+              if [[ -f "$path" ]]; then
+                echo "### $name"
+                echo '```text'
+                tail -n 180 "$path"
+                echo '```'
+                echo
+              fi
+            done
+          } > "$body_path"
+          gh issue edit "$LINUX_STATUS_ISSUE" --body-file "$body_path"
 
       - name: Package Linux x64 archive
         id: package
@@ -117,11 +188,15 @@ jobs:
           Input: optional EpochGui fallback enabled for the standalone demo
           Window chrome: custom EpochGui title bar with native decorations enabled by default and toggleable at runtime
           Icon: _NET_WM_ICON supplied by the native X11 host
+          Responsiveness: X11 events are drained and coalesced before GLX rendering
           Contents: one user-facing executable plus README, BUILD metadata, and the demo image asset
           EOF
 
           tar -C "$RUNNER_TEMP" -czf "$archive" "$stage_name"
-          sha256sum "$(basename "$archive")" > "$checksum"
+          (
+            cd "$GITHUB_WORKSPACE"
+            sha256sum "$(basename "$archive")"
+          ) > "$checksum"
 
           echo "tag=v${version}" >> "$GITHUB_OUTPUT"
           echo "archive=$archive" >> "$GITHUB_OUTPUT"
@@ -154,3 +229,11 @@ jobs:
           fi
 
           gh release upload "$tag" "$archive" "$checksum" --clobber
+
+      - name: Close verified Linux release status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue close "$LINUX_STATUS_ISSUE" \
+            --comment "Linux x64 archive and SHA-256 checksum attached successfully for commit \`${{ steps.revision.outputs.sha }}\`: \`${{ steps.package.outputs.archive }}\`."
