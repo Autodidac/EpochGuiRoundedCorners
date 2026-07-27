@@ -7,6 +7,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 if(NOT CMAKE_GENERATOR MATCHES "Ninja|Visual Studio")
     message(FATAL_ERROR "EpochGUI's C++23 module demo requires Ninja or Visual Studio.")
 endif()
@@ -82,9 +86,36 @@ target_link_libraries(epoch_gui_rounded_corners_demo PRIVATE
 
 target_compile_features(epoch_gui_rounded_corners_demo PRIVATE cxx_std_23)
 
+if(WIN32)
+    add_executable(epoch_gui_rounded_corners_windows WIN32
+        src/windows_demo.cpp
+    )
+
+    set_target_properties(epoch_gui_rounded_corners_windows PROPERTIES
+        CXX_SCAN_FOR_MODULES ON
+        OUTPUT_NAME "EpochGuiRoundedCorners"
+    )
+
+    target_compile_definitions(epoch_gui_rounded_corners_windows PRIVATE
+        UNICODE
+        _UNICODE
+    )
+
+    target_compile_features(epoch_gui_rounded_corners_windows PRIVATE cxx_std_23)
+
+    target_link_libraries(epoch_gui_rounded_corners_windows PRIVATE
+        epoch_gui_rounded_rect
+        d2d1
+        dwrite
+    )
+endif()
+
 if(MSVC)
     target_compile_options(epoch_gui_rounded_rect PRIVATE /W4 /permissive-)
     target_compile_options(epoch_gui_rounded_corners_demo PRIVATE /W4 /permissive-)
+    if(TARGET epoch_gui_rounded_corners_windows)
+        target_compile_options(epoch_gui_rounded_corners_windows PRIVATE /W4 /permissive-)
+    endif()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(epoch_gui_rounded_rect PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(epoch_gui_rounded_corners_demo PRIVATE -Wall -Wextra -Wpedantic)
