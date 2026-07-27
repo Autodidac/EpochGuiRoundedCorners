@@ -58,7 +58,7 @@ add_subdirectory(
 )
 
 add_library(epoch_gui_demo_renderer STATIC
-    src/complete_demo_renderer.cpp
+    src/complete_demo_renderer_build.cpp
     src/app_bridge.cpp
 )
 
@@ -86,6 +86,7 @@ if(WIN32)
         src/platform/complete_windows_main.cpp
         src/platform/windows_resources.rc
         src/platform/windows_message_coords.hpp
+        src/platform/epochgui_demo.ico
     )
 
     target_compile_definitions(epoch_gui_demo_app PRIVATE
@@ -99,6 +100,7 @@ if(WIN32)
         epoch_gui_demo_renderer
         dwmapi
         opengl32
+        uxtheme
     )
 
     if(MSVC)
