@@ -14,6 +14,13 @@ The project generates renderer-independent triangle meshes for filled and border
 - Configurable tessellation from 1 to 64 segments per corner
 - Sanitization of negative and non-finite input
 - Deterministic vertices and triangle indices
+- Progressive startup reveal that assembles the real border triangles segment by segment
+
+## Startup border reveal
+
+When the native application opens, the fills appear immediately and the four rounded borders assemble in contour order. The renderer waits briefly, then reveals one border segment every 25 milliseconds across the examples.
+
+The animation is time-based and non-blocking. Windows, Linux, and macOS keep processing native events while it runs, then return to event-driven rendering after the reveal completes.
 
 ## Architecture
 
@@ -43,13 +50,15 @@ No third-party windowing or OpenGL loader library is used.
 
 ## Windows release
 
-The Windows release contains exactly one application:
+The Windows release is a ZIP containing:
 
 ```text
-EpochGuiRoundedCorners-v0.1.2-windows-x64.exe
+EpochGuiRoundedCorners.exe
+README.md
+BUILD.txt
 ```
 
-The geometry contract test is used only during the build and is not included in the release.
+The geometry contract test is used only during the build and is not included in the release. A SHA-256 checksum is published beside the ZIP.
 
 ## Dependencies
 
@@ -61,7 +70,7 @@ Build requirements:
 
 - CMake 3.28 or newer
 - A C++23 compiler with module support
-- Visual Studio 2022 or Ninja
+- Visual Studio 2022/2026 or Ninja
 
 Platform components:
 
@@ -74,12 +83,17 @@ The project does not use GLFW, SDL, SFML, GLAD, GLEW, or another package-manager
 ## Repository layout
 
 ```text
-include/                         Native host bridge
-modules/                         C++23 module interfaces
-src/rounded_rect.cpp             Rounded geometry implementation
-src/opengl_renderer.cpp          Shared OpenGL renderer
-src/platform/                    Native platform hosts
-tests/geometry_contract.cpp      Internal geometry contract test
+CMakePresets.json                 Windows and Linux configure/build presets
+build_msvc.bat/.ps1               Generate, build, test, and locate the Windows executable
+generate_msvc.ps1                 Select Visual Studio 2026 or 2022 automatically
+open_msvc.bat/.ps1                Generate and open the Visual Studio solution
+build_linux.sh                    Configure, build, and test a Linux preset
+include/                          Native host bridge
+modules/                          C++23 module interfaces
+src/rounded_rect.cpp              Rounded geometry implementation
+src/opengl_renderer.cpp           Shared OpenGL renderer and startup reveal
+src/platform/                     Native platform hosts
+tests/geometry_contract.cpp       Internal geometry contract test
 ```
 
 ## EpochEngine checkout
@@ -109,29 +123,61 @@ For another layout, pass the engine directory explicitly:
 
 ### Windows
 
-```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release
-ctest --test-dir build -C Release --output-on-failure
-.\build\Release\EpochGuiRoundedCorners.exe
+Generate and open the best installed Visual Studio version:
+
+```text
+open_msvc.bat
+```
+
+Build and run the geometry contract test:
+
+```text
+build_msvc.bat Release
+```
+
+The script automatically selects Visual Studio 2026 when available, otherwise Visual Studio 2022. The executable is written to:
+
+```text
+build/vs2026/Release/EpochGuiRoundedCorners.exe
+```
+
+or:
+
+```text
+build/vs2022/Release/EpochGuiRoundedCorners.exe
 ```
 
 ### Linux
 
+GCC 14 preset:
+
 ```bash
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-ctest --test-dir build --output-on-failure
-./build/EpochGuiRoundedCorners
+chmod +x build_linux.sh
+./build_linux.sh linux-gcc-release
+```
+
+Clang 18 preset:
+
+```bash
+./build_linux.sh linux-clang-release
+```
+
+Clang requires a matching `clang-scan-deps` installation for C++23 module scanning.
+
+Outputs:
+
+```text
+build/linux-gcc/EpochGuiRoundedCorners
+build/linux-clang/EpochGuiRoundedCorners
 ```
 
 ### macOS
 
 ```bash
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-ctest --test-dir build --output-on-failure
-open build/EpochGuiRoundedCorners.app
+cmake -S . -B build/macos -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/macos
+ctest --test-dir build/macos --output-on-failure
+open build/macos/EpochGuiRoundedCorners.app
 ```
 
 ## Integrating into EpochGUI
