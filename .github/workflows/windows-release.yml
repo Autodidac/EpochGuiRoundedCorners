@@ -1,4 +1,4 @@
-name: Windows Release
+name: Cross-Platform OpenGL Build
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
     paths:
       - CMakeLists.txt
       - VERSION
+      - include/**
       - modules/**
       - src/**
       - .github/workflows/windows-release.yml
@@ -16,8 +17,8 @@ permissions:
   contents: write
 
 jobs:
-  build-release:
-    name: Build Windows x64 release
+  windows:
+    name: Windows x64 MSVC
     runs-on: windows-2022
 
     steps:
@@ -31,29 +32,24 @@ jobs:
           ref: main
           path: EpochEngine
 
-      - name: Configure MSVC environment
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
       - name: Configure
         shell: pwsh
         run: >-
-          cmake -S . -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build
+          -G "Visual Studio 17 2022"
+          -A x64
           -DBUILD_TESTING=ON
           -DEPOCH_ENGINE_ROOT="${{ github.workspace }}/EpochEngine/Engine"
 
       - name: Build
         shell: pwsh
-        run: cmake --build build --config Release
+        run: cmake --build build --config Release --parallel
 
       - name: Validate geometry and SVG generation
         shell: pwsh
-        run: ctest --test-dir build --output-on-failure -C Release
+        run: ctest --test-dir build -C Release --output-on-failure
 
       - name: Package Windows release
-        id: package
         shell: pwsh
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
@@ -72,14 +68,14 @@ jobs:
           Remove-Item $checksum -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path $stage | Out-Null
 
-          Copy-Item build/EpochGuiRoundedCorners.exe $stage
-          Copy-Item build/epoch_gui_rounded_corners_demo.exe $stage
+          Copy-Item build/Release/EpochGuiRoundedCorners.exe $stage
+          Copy-Item build/Release/epoch_gui_rounded_corners_demo.exe $stage
           Copy-Item README.md $stage
 
-          & build/epoch_gui_rounded_corners_demo.exe `
+          & build/Release/epoch_gui_rounded_corners_demo.exe `
               (Join-Path $stage 'epochgui_rounded_corners_demo.svg')
           if ($LASTEXITCODE -ne 0) {
-              throw "The packaged geometry validator failed with exit code $LASTEXITCODE"
+              throw "Packaged geometry validation failed with exit code $LASTEXITCODE"
           }
 
           @(
@@ -87,7 +83,8 @@ jobs:
               "Commit: $env:GITHUB_SHA"
               "Platform: Windows x64"
               "Compiler: MSVC"
-              "Runtime: static"
+              "Renderer: OpenGL 3.2 core through Win32/WGL"
+              "Third-party runtime dependencies: none"
           ) | Set-Content -Path (Join-Path $stage 'BUILD.txt') -Encoding utf8
 
           Compress-Archive -Path "$stage/*" -DestinationPath $zip -CompressionLevel Optimal
@@ -98,29 +95,119 @@ jobs:
           "RELEASE_ZIP=$zip" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RELEASE_CHECKSUM=$checksum" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Upload workflow artifact
+      - name: Upload Windows release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.RELEASE_TAG }}-windows-x64
+          name: windows-release
           path: |
             ${{ env.RELEASE_ZIP }}
             ${{ env.RELEASE_CHECKSUM }}
           if-no-files-found: error
 
-      - name: Publish GitHub release
-        shell: pwsh
+  linux:
+    name: Linux x64 Clang
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang ninja-build libx11-dev libgl1-mesa-dev
+
+      - name: Check out rounded-corner demo
+        uses: actions/checkout@v4
+
+      - name: Check out EpochEngine
+        uses: actions/checkout@v4
+        with:
+          repository: Autodidac/EpochEngine
+          ref: main
+          path: EpochEngine
+
+      - name: Configure
+        env:
+          CC: clang
+          CXX: clang++
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=ON
+          -DEPOCH_ENGINE_ROOT="${{ github.workspace }}/EpochEngine/Engine"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Validate geometry and SVG generation
+        run: ctest --test-dir build --output-on-failure
+
+  macos:
+    name: macOS arm64 AppleClang
+    runs-on: macos-14
+
+    steps:
+      - name: Install Ninja
+        run: brew install ninja
+
+      - name: Check out rounded-corner demo
+        uses: actions/checkout@v4
+
+      - name: Check out EpochEngine
+        uses: actions/checkout@v4
+        with:
+          repository: Autodidac/EpochEngine
+          ref: main
+          path: EpochEngine
+
+      - name: Configure
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=ON
+          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_OBJCXX_COMPILER=clang++
+          -DEPOCH_ENGINE_ROOT="${{ github.workspace }}/EpochEngine/Engine"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Validate geometry and SVG generation
+        run: ctest --test-dir build --output-on-failure
+
+  release:
+    name: Publish Windows release
+    needs:
+      - windows
+      - linux
+      - macos
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out release metadata
+        uses: actions/checkout@v4
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-release
+          path: release-assets
+
+      - name: Publish or refresh release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view $env:RELEASE_TAG *> $null
-          if ($LASTEXITCODE -eq 0) {
-              Write-Host "Release $env:RELEASE_TAG already exists; leaving it unchanged."
-              exit 0
-          }
+          version="$(tr -d '[:space:]' < VERSION)"
+          tag="v${version}"
+          zip="$(find release-assets -maxdepth 1 -name '*.zip' -print -quit)"
+          checksum="$(find release-assets -maxdepth 1 -name '*.sha256' -print -quit)"
 
-          gh release create $env:RELEASE_TAG `
-              $env:RELEASE_ZIP `
-              $env:RELEASE_CHECKSUM `
-              --target $env:GITHUB_SHA `
-              --title "EpochGUI Rounded Corners $env:RELEASE_TAG" `
-              --notes "Windows x64 Direct2D demo plus the headless rounded-geometry validator and generated SVG reference. Built with C++23 modules and the current EpochGUI module from EpochEngine."
+          test -n "$zip"
+          test -n "$checksum"
+
+          notes="Cross-platform C++23 EpochGUI rounded-corner demo. The Windows asset uses OpenGL 3.2 core through native Win32/WGL with no third-party runtime dependencies. The same source is build-verified through X11/GLX on Linux and Cocoa/OpenGL on macOS."
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$zip" "$checksum" --clobber
+            gh release edit "$tag" --target "$GITHUB_SHA" --title "EpochGUI Rounded Corners $tag" --notes "$notes"
+          else
+            gh release create "$tag" "$zip" "$checksum" --target "$GITHUB_SHA" --title "EpochGUI Rounded Corners $tag" --notes "$notes"
+          fi
