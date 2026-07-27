@@ -73,14 +73,14 @@ Demonstrates:
 
 The custom EpochGui title bar is **always visible**.
 
-The native Windows outer frame is enabled by default. The toolbar toggle switches only the outer host style:
+The native Windows outer frame is enabled by default. The toolbar toggle switches only the outer host presentation:
 
 - **Native frame on:** ordinary Windows frame plus the custom EpochGui application bar
 - **Borderless mode:** custom EpochGui title bar and its native move/resize/command mapping without the standard outer frame
 
 The custom minimize, maximize, and close buttons remain active in both modes. On Windows, the custom caption and resize regions are mapped through `WM_NCHITTEST`, retaining native moving, snapping, and resizing behavior.
 
-Both the toolbar switch and the right-click context-menu switch use the same deferred host path. The renderer posts a private Windows message, the style change runs after the current input/render callback returns, and `WM_SIZE` only updates the viewport and invalidates the window. This avoids recursively entering the OpenGL renderer while `SWP_FRAMECHANGED` is rebuilding the native frame.
+Both the toolbar switch and the right-click context-menu switch use the same deferred host path. The Win32 window is created once with `WS_OVERLAPPEDWINDOW` and keeps that style for its entire lifetime. Toggling changes only custom non-client calculation and painting behavior, then requests `SWP_FRAMECHANGED` after the current input/render callback has returned. The code does not call `SetWindowLongPtr(GWL_STYLE)` at runtime, so the HWND, device context, pixel format, and OpenGL context remain stable.
 
 ## Optional fallback input
 
@@ -147,7 +147,7 @@ This repository owns only:
 - OpenGL 3.2 core presentation
 - Demo-side text-event forwarding
 - PPM image loading and display
-- Native frame-style switching and host window commands
+- Native frame presentation and host window commands
 - A compact bitmap font
 - Build scripts and release packaging
 
