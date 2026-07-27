@@ -7,6 +7,7 @@
 #include "epochgui_demo/app_bridge.hpp"
 
 #include <cstdint>
+#include <cstring>
 
 namespace
 {
@@ -30,21 +31,30 @@ namespace
             || value == static_cast<std::uintptr_t>(-1);
     }
 
-    [[nodiscard]] epoch_gui_demo_gl_proc load_opengl_proc(const char* name)
+    [[nodiscard]] epoch_gui_demo_gl_proc system_opengl_proc(const char* name) noexcept
     {
-        auto address = reinterpret_cast<epoch_gui_demo_gl_proc>(wglGetProcAddress(name));
-        if (!invalid_wgl_address(address))
-            return address;
+        if (std::strcmp(name, "glClearColor") == 0)
+            return reinterpret_cast<epoch_gui_demo_gl_proc>(&::glClearColor);
+        if (std::strcmp(name, "glClear") == 0)
+            return reinterpret_cast<epoch_gui_demo_gl_proc>(&::glClear);
+        if (std::strcmp(name, "glViewport") == 0)
+            return reinterpret_cast<epoch_gui_demo_gl_proc>(&::glViewport);
+        if (std::strcmp(name, "glDrawElements") == 0)
+            return reinterpret_cast<epoch_gui_demo_gl_proc>(&::glDrawElements);
+        return nullptr;
+    }
 
-        static HMODULE opengl_module = []
-        {
-            HMODULE module = GetModuleHandleW(L"opengl32.dll");
-            return module ? module : LoadLibraryW(L"opengl32.dll");
-        }();
+    [[nodiscard]] epoch_gui_demo_gl_proc load_opengl_proc(const char* name) noexcept
+    {
+        if (!name)
+            return nullptr;
 
-        return opengl_module
-            ? reinterpret_cast<epoch_gui_demo_gl_proc>(GetProcAddress(opengl_module, name))
-            : nullptr;
+        if (const auto system_proc = system_opengl_proc(name))
+            return system_proc;
+
+        const auto address = reinterpret_cast<epoch_gui_demo_gl_proc>(
+            wglGetProcAddress(name));
+        return invalid_wgl_address(address) ? nullptr : address;
     }
 
     class WindowsApplication final
