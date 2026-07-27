@@ -14,6 +14,7 @@ module epoch.gui.demo.opengl;
 
 import epoch.gui;
 import epoch.gui.rounded_rect;
+import epoch.gui.input;
 
 namespace epochengine::gui_demo
 {
@@ -21,6 +22,7 @@ namespace epochengine::gui_demo
     {
         namespace gui = epochengine::gui_lib;
         namespace rounded = epochengine::gui_lib::rounded_rect;
+        namespace input = epochengine::gui_lib::input;
 
         using GLenum = unsigned int;
         using GLboolean = unsigned char;
@@ -45,6 +47,9 @@ namespace epochengine::gui_demo
 
         constexpr float canvas_width = 1280.0f;
         constexpr float canvas_height = 820.0f;
+        constexpr float native_title_height = 54.0f;
+        constexpr float toolbar_height = 58.0f;
+        constexpr float workspace_top = native_title_height + toolbar_height;
 
         struct Color
         {
@@ -64,21 +69,24 @@ namespace epochengine::gui_demo
             };
         }
 
-        constexpr Color background = rgb(0x0b1020);
-        constexpr Color header_fill = rgb(0x111a2f);
-        constexpr Color panel_fill = rgb(0x121b2d);
-        constexpr Color panel_border = rgb(0x2a3a55);
-        constexpr Color control_fill = rgb(0x1a263d);
-        constexpr Color control_hover = rgb(0x233653);
-        constexpr Color control_selected = rgb(0x315a8a);
-        constexpr Color content_fill = rgb(0x0f1728);
+        constexpr Color background = rgb(0x0a0f1c);
+        constexpr Color title_fill = rgb(0x111a2b);
+        constexpr Color toolbar_fill = rgb(0x0e1728);
+        constexpr Color sidebar_fill = rgb(0x10192a);
+        constexpr Color workspace_fill = rgb(0c0f1827);
+        constexpr Color panel_fill = rgb(0x141f33);
+        constexpr Color panel_border = rgb(0x2a3b57);
+        constexpr Color control_fill = rgb(0x1b2941);
+        constexpr Color control_hover = rgb(0x263b5c);
+        constexpr Color control_selected = rgb(0x315f91);
         constexpr Color accent = rgb(0x65a7ff);
-        constexpr Color accent_soft = rgb(0x244b77);
+        constexpr Color accent_soft = rgb(0x244d79);
         constexpr Color green = rgb(0x6ee7b7);
-        constexpr Color warning = rgb(0xf7c873);
-        constexpr Color text_primary = rgb(0xe8eef8);
-        constexpr Color text_secondary = rgb(0x9fb0c8);
-        constexpr Color text_muted = rgb(0x71829b);
+        constexpr Color warning = rgb(0xf2bd62);
+        constexpr Color danger = rgb(0xef6b73);
+        constexpr Color text_primary = rgb(0xeaf0fa);
+        constexpr Color text_secondary = rgb(0xa9b9cf);
+        constexpr Color text_muted = rgb(0x71839d);
 
         template <typename Function>
         [[nodiscard]] bool load_function(
@@ -198,6 +206,12 @@ namespace epochengine::gui_demo
             std::vector<gui::Vec2> vertices{};
             std::vector<DrawCommand> commands{};
 
+            void clear()
+            {
+                vertices.clear();
+                commands.clear();
+            }
+
             void append_triangle(gui::Vec2 a, gui::Vec2 b, gui::Vec2 c)
             {
                 vertices.push_back(a);
@@ -235,6 +249,7 @@ namespace epochengine::gui_demo
                     if (index < mesh.vertices.size())
                         vertices.push_back(mesh.vertices[index]);
                 }
+
                 const GLsizei count = static_cast<GLsizei>(vertices.size()) - first;
                 if (count > 0)
                     commands.push_back({ first, count, color });
@@ -367,301 +382,6 @@ namespace epochengine::gui_demo
             }
         }
 
-        void draw_segmented_control(SceneBatch& batch, float x, float y, bool use_rounded)
-        {
-            constexpr std::array<float, 3> widths{ 104.0f, 104.0f, 104.0f };
-            const gui::SegmentedControlLayoutOptions options{
-                .position = { x, y },
-                .item_widths = widths,
-                .height = 34.0f,
-                .gap = 4.0f
-            };
-
-            for (std::uint32_t index = 0; index < widths.size(); ++index)
-            {
-                const gui::Rect item = gui::segmented_control_item_layout(options, index);
-                draw_surface(
-                    batch,
-                    item,
-                    use_rounded,
-                    8.0f,
-                    index == 1 ? control_selected : control_fill,
-                    index == 1 ? accent : panel_border,
-                    1.0f);
-            }
-
-            draw_text(batch, x + 27.0f, y + 11.0f, "LAYOUT", 1.5f, text_secondary);
-            draw_text(batch, x + 126.0f, y + 11.0f, "STATE", 1.5f, text_primary);
-            draw_text(batch, x + 234.0f, y + 11.0f, "INPUT", 1.5f, text_secondary);
-        }
-
-        void draw_progress(SceneBatch& batch, float x, float y, bool use_rounded)
-        {
-            const gui::ProgressBarLayout progress = gui::make_progress_bar_layout({
-                .track = { { x, y }, { 332.0f, 24.0f } },
-                .value = 72.0f,
-                .minimum = 0.0f,
-                .maximum = 100.0f,
-                .padding = 3.0f,
-                .direction = gui::ProgressBarDirection::left_to_right
-            });
-
-            draw_surface(batch, progress.track, use_rounded, 7.0f, content_fill, panel_border, 1.0f);
-            draw_surface(batch, progress.fill, use_rounded, 5.0f, accent, accent, 0.0f);
-            draw_text(batch, x + 272.0f, y + 8.0f, "72", 1.4f, text_primary);
-        }
-
-        void draw_splitter(SceneBatch& batch, float x, float y, bool use_rounded)
-        {
-            const gui::SplitterLayout split = gui::make_splitter_layout({
-                .area = { { x, y }, { 552.0f, 104.0f } },
-                .axis = gui::SplitterAxis::vertical,
-                .split_fraction = 0.38f,
-                .thickness = 8.0f,
-                .min_before = 100.0f,
-                .min_after = 160.0f
-            });
-
-            draw_surface(batch, split.before, use_rounded, 8.0f, content_fill, panel_border, 1.0f);
-            draw_surface(batch, split.after, use_rounded, 8.0f, control_fill, panel_border, 1.0f);
-            draw_surface(batch, split.handle, use_rounded, 4.0f, accent_soft, accent_soft, 0.0f);
-
-            draw_text(batch, split.before.position.x + 18.0f, split.before.position.y + 18.0f, "TREE", 1.6f, text_secondary);
-            draw_text(batch, split.after.position.x + 18.0f, split.after.position.y + 18.0f, "CONTENT", 1.6f, text_secondary);
-
-            for (int row = 0; row < 3; ++row)
-            {
-                draw_surface(batch, {
-                    { split.before.position.x + 18.0f, split.before.position.y + 46.0f + row * 16.0f },
-                    { 126.0f + row * 12.0f, 7.0f }
-                }, use_rounded, 3.0f, row == 1 ? accent_soft : panel_border, panel_border, 0.0f);
-            }
-
-            for (int row = 0; row < 3; ++row)
-            {
-                draw_surface(batch, {
-                    { split.after.position.x + 18.0f, split.after.position.y + 46.0f + row * 16.0f },
-                    { 244.0f - row * 22.0f, 7.0f }
-                }, use_rounded, 3.0f, row == 0 ? green : panel_border, panel_border, 0.0f);
-            }
-        }
-
-        void draw_selectable_list(SceneBatch& batch, float x, float y, bool use_rounded)
-        {
-            const gui::SelectableListLayoutOptions options{
-                .viewport = { { x, y }, { 266.0f, 150.0f } },
-                .row_count = 4,
-                .row_height = 31.0f,
-                .row_gap = 4.0f,
-                .scroll_offset = 0.0f,
-                .content_padding_x = 8.0f,
-                .content_padding_y = 7.0f
-            };
-
-            draw_surface(batch, options.viewport, use_rounded, 8.0f, content_fill, panel_border, 1.0f);
-
-            for (std::uint32_t index = 0; index < options.row_count; ++index)
-            {
-                const bool selected = index == 1;
-                const gui::Vec2 pointer{
-                    options.viewport.position.x + 20.0f,
-                    options.viewport.position.y + 7.0f + 2.0f * (options.row_height + options.row_gap) + 10.0f
-                };
-                const gui::SelectableRowLayout row = gui::make_selectable_row_layout(
-                    options,
-                    index,
-                    pointer,
-                    selected);
-                if (!row.visible)
-                    continue;
-
-                Color row_color = control_fill;
-                if (row.hovered)
-                    row_color = control_hover;
-                if (row.selected)
-                    row_color = control_selected;
-
-                draw_surface(
-                    batch,
-                    row.row,
-                    use_rounded,
-                    6.0f,
-                    row_color,
-                    row.selected ? accent : row_color,
-                    row.selected ? 1.0f : 0.0f);
-
-                constexpr std::array<std::string_view, 4> labels{
-                    "SCENE", "INSPECTOR", "ASSETS", "CONSOLE"
-                };
-                draw_text(batch, row.content.position.x + 4.0f, row.content.position.y + 9.0f, labels[index], 1.5f,
-                    row.selected ? text_primary : text_secondary);
-            }
-        }
-
-        void draw_popup(SceneBatch& batch, float x, float y, bool use_rounded)
-        {
-            const gui::Rect owner{ { x, y }, { 218.0f, 34.0f } };
-            draw_surface(batch, owner, use_rounded, 7.0f, control_selected, accent, 1.0f);
-            draw_text(batch, x + 20.0f, y + 11.0f, "OPEN POPUP", 1.5f, text_primary);
-
-            gui::PopupPlacement placement{};
-            bool flipped{};
-            bool clamped{};
-            const gui::Rect popup = gui::place_popup({
-                .owner = owner,
-                .preferred_size = { 218.0f, 110.0f },
-                .viewport_size = { canvas_width, canvas_height },
-                .placement = gui::PopupPlacement::below,
-                .gap = 6.0f,
-                .margin = 10.0f,
-                .flip_to_fit = true,
-                .clamp_to_viewport = true
-            }, {}, &placement, &flipped, &clamped);
-
-            draw_surface(batch, popup, use_rounded, 10.0f, panel_fill, accent_soft, 1.5f);
-            constexpr std::array<std::string_view, 3> items{ "NEW PANEL", "DUPLICATE", "CLOSE" };
-            for (std::size_t index = 0; index < items.size(); ++index)
-            {
-                const gui::Rect item{
-                    { popup.position.x + 10.0f, popup.position.y + 10.0f + static_cast<float>(index) * 31.0f },
-                    { popup.size.x - 20.0f, 26.0f }
-                };
-                draw_surface(batch, item, use_rounded, 5.0f,
-                    index == 0 ? control_hover : content_fill,
-                    index == 0 ? accent_soft : content_fill,
-                    0.0f);
-                draw_text(batch, item.position.x + 10.0f, item.position.y + 8.0f, items[index], 1.4f,
-                    index == 2 ? warning : text_secondary);
-            }
-        }
-
-        void draw_floating_window(SceneBatch& batch, float x, float y, bool use_rounded)
-        {
-            gui::FloatingWindowState state{
-                .position = { x, y },
-                .size = { 250.0f, 104.0f },
-                .open = true,
-                .initialized = true,
-                .focus_order = 3
-            };
-            const gui::FloatingWindowLayout layout = gui::update_floating_window(
-                state,
-                {
-                    .default_position = { x, y },
-                    .default_size = { 250.0f, 104.0f },
-                    .min_size = { 180.0f, 90.0f },
-                    .viewport_size = { canvas_width, canvas_height },
-                    .title_bar_height = 25.0f,
-                    .content_padding = 6.0f,
-                    .movable = true,
-                    .resizable = true,
-                    .closable = true
-                },
-                {});
-
-            draw_surface(batch, layout.window, use_rounded, 9.0f, panel_fill, accent_soft, 1.5f);
-            draw_surface(batch, layout.title_bar, use_rounded, 8.0f, control_selected, control_selected, 0.0f);
-            batch.append_rect({
-                { layout.title_bar.position.x, layout.title_bar.position.y + layout.title_bar.size.y - 8.0f },
-                { layout.title_bar.size.x, 8.0f }
-            }, control_selected);
-            draw_text(batch, layout.title_bar.position.x + 10.0f, layout.title_bar.position.y + 8.0f,
-                "FLOATING WINDOW", 1.35f, text_primary);
-            draw_surface(batch, layout.close_button, true, 6.0f, warning, warning, 0.0f);
-            draw_surface(batch, {
-                { layout.content.position.x + 10.0f, layout.content.position.y + 13.0f },
-                { layout.content.size.x - 20.0f, 8.0f }
-            }, use_rounded, 3.0f, panel_border, panel_border, 0.0f);
-            draw_surface(batch, {
-                { layout.content.position.x + 10.0f, layout.content.position.y + 32.0f },
-                { layout.content.size.x * 0.58f, 8.0f }
-            }, use_rounded, 3.0f, accent_soft, accent_soft, 0.0f);
-        }
-
-        void draw_loading_layout(SceneBatch& batch, float x, float y, bool use_rounded)
-        {
-            const gui::LoadingScreenLayout loading = gui::make_loading_screen_layout({
-                .viewport = { { x, y }, { 552.0f, 126.0f } },
-                .preferred_panel_size = { 552.0f, 126.0f },
-                .minimum_panel_size = { 420.0f, 110.0f },
-                .margin = 0.0f,
-                .padding = 12.0f,
-                .gap = 6.0f,
-                .title_height = 14.0f,
-                .message_height = 18.0f,
-                .progress_height = 18.0f,
-                .status_height = 12.0f,
-                .action_height = 22.0f,
-                .progress_padding = 2.0f,
-                .progress_value = 0.64f
-            });
-
-            draw_surface(batch, loading.panel, use_rounded, 10.0f, content_fill, panel_border, 1.0f);
-            draw_text(batch, loading.title.position.x, loading.title.position.y + 2.0f, "LOADING LAYOUT", 1.5f, text_primary);
-            draw_surface(batch, {
-                { loading.message.position.x, loading.message.position.y + 5.0f },
-                { loading.message.size.x * 0.72f, 7.0f }
-            }, use_rounded, 3.0f, panel_border, panel_border, 0.0f);
-            draw_surface(batch, loading.progress.track, use_rounded, 5.0f, panel_fill, panel_border, 1.0f);
-            draw_surface(batch, loading.progress.fill, use_rounded, 4.0f, green, green, 0.0f);
-            draw_text(batch, loading.status.position.x, loading.status.position.y + 1.0f, "64 PERCENT", 1.25f, text_secondary);
-            draw_surface(batch, loading.action, use_rounded, 6.0f, control_fill, panel_border, 1.0f);
-        }
-
-        void draw_column(SceneBatch& batch, float x, bool use_rounded)
-        {
-            const gui::Rect column{ { x, 96.0f }, { 604.0f, 700.0f } };
-            draw_surface(batch, column, use_rounded, 14.0f, panel_fill, panel_border, 1.5f);
-
-            draw_text(batch, x + 24.0f, 116.0f,
-                use_rounded ? "OPTIONAL ROUNDED" : "CORE RECTANGULAR",
-                2.0f,
-                use_rounded ? green : accent);
-            draw_text(batch, x + 24.0f, 142.0f,
-                use_rounded ? "EPOCH.GUI.ROUNDED_RECT ENABLED" : "EPOCH.GUI CORE LAYOUT ONLY",
-                1.25f,
-                text_muted);
-
-            draw_text(batch, x + 24.0f, 176.0f, "SEGMENTED CONTROL", 1.35f, text_secondary);
-            draw_segmented_control(batch, x + 24.0f, 196.0f, use_rounded);
-
-            draw_text(batch, x + 24.0f, 246.0f, "PROGRESS BAR", 1.35f, text_secondary);
-            draw_progress(batch, x + 24.0f, 266.0f, use_rounded);
-
-            draw_text(batch, x + 24.0f, 312.0f, "SPLITTER AND PANES", 1.35f, text_secondary);
-            draw_splitter(batch, x + 24.0f, 332.0f, use_rounded);
-            draw_floating_window(batch, x + 326.0f, 340.0f, use_rounded);
-
-            draw_text(batch, x + 24.0f, 458.0f, "SELECTABLE LIST", 1.35f, text_secondary);
-            draw_selectable_list(batch, x + 24.0f, 478.0f, use_rounded);
-
-            draw_text(batch, x + 310.0f, 458.0f, "POPUP LAYOUT", 1.35f, text_secondary);
-            draw_popup(batch, x + 310.0f, 478.0f, use_rounded);
-
-            draw_text(batch, x + 24.0f, 642.0f, "LOADING SCREEN LAYOUT", 1.35f, text_secondary);
-            draw_loading_layout(batch, x + 24.0f, 662.0f, use_rounded);
-        }
-
-        void build_scene(SceneBatch& batch)
-        {
-            batch.vertices.clear();
-            batch.commands.clear();
-            batch.vertices.reserve(24000);
-            batch.commands.reserve(1800);
-
-            batch.append_rect({ { 0.0f, 0.0f }, { canvas_width, canvas_height } }, background);
-            batch.append_rect({ { 0.0f, 0.0f }, { canvas_width, 80.0f } }, header_fill);
-            batch.append_rect({ { 0.0f, 78.0f }, { canvas_width, 2.0f } }, accent_soft);
-
-            draw_text(batch, 28.0f, 22.0f, "EPOCHGUI DEMO", 3.0f, text_primary);
-            draw_text(batch, 307.0f, 31.0f, "CORE LAYOUTS VS OPTIONAL ROUNDED GEOMETRY", 1.5f, text_secondary);
-            draw_surface(batch, { { 1100.0f, 21.0f }, { 150.0f, 34.0f } }, true, 17.0f, accent_soft, accent, 1.0f);
-            draw_text(batch, 1122.0f, 32.0f, "EPOCHGUI", 1.7f, text_primary);
-
-            draw_column(batch, 24.0f, false);
-            draw_column(batch, 652.0f, true);
-        }
-
         [[nodiscard]] GLuint compile_shader(
             OpenGLFunctions& gl,
             GLenum type,
@@ -747,7 +467,17 @@ void main()
     struct OpenGLRenderer::Impl
     {
         OpenGLFunctions gl{};
-        SceneBatch scene{};
+        SceneBatch batch{};
+        input::InputTracker input_tracker{};
+        gui::FloatingWindowState core_window{};
+        gui::FloatingWindowState rounded_window{};
+        gui::FloatingWindowLayout core_layout{};
+        gui::FloatingWindowLayout rounded_layout{};
+        gui::PopupState context_popup{};
+        gui::PopupLayout context_layout{};
+        gui::Vec2 context_anchor{};
+        input::BorderlessWindowChromeLayout chrome_layout{};
+        input::WindowCommand pending_window_command{ input::WindowCommand::none };
         GLuint program{};
         GLuint vertex_array{};
         GLuint vertex_buffer{};
@@ -755,18 +485,69 @@ void main()
         GLint color_uniform{ -1 };
         int framebuffer_width{ static_cast<int>(canvas_width) };
         int framebuffer_height{ static_cast<int>(canvas_height) };
+        std::uint32_t selected_sidebar_row{ 1 };
+        std::uint32_t display_mode{ 2 };
+        std::uint32_t next_focus_order{ 3 };
         bool initialized{};
+
+        Impl()
+        {
+            reset_windows();
+            rebuild_chrome();
+        }
 
         ~Impl()
         {
             release();
         }
 
+        void reset_windows() noexcept
+        {
+            core_window = gui::FloatingWindowState{
+                .position = { 292.0f, 196.0f },
+                .size = { 390.0f, 258.0f },
+                .open = true,
+                .initialized = true,
+                .focus_order = 1
+            };
+            rounded_window = gui::FloatingWindowState{
+                .position = { 650.0f, 300.0f },
+                .size = { 410.0f, 276.0f },
+                .open = true,
+                .initialized = true,
+                .focus_order = 2
+            };
+            next_focus_order = 3;
+        }
+
+        void rebuild_chrome() noexcept
+        {
+            chrome_layout = input::make_borderless_window_chrome_layout({
+                .bounds = { { 0.0f, 0.0f }, { canvas_width, canvas_height } },
+                .title_bar_height = native_title_height,
+                .resize_border = 7.0f,
+                .caption_padding_left = 18.0f,
+                .button_width = 48.0f,
+                .movable = true,
+                .resizable = true,
+                .minimizable = true,
+                .maximizable = true,
+                .closable = true
+            });
+        }
+
+        [[nodiscard]] gui::Vec2 to_canvas(float x, float y) const noexcept
+        {
+            const float width = framebuffer_width > 0 ? static_cast<float>(framebuffer_width) : canvas_width;
+            const float height = framebuffer_height > 0 ? static_cast<float>(framebuffer_height) : canvas_height;
+            return {
+                x * canvas_width / width,
+                y * canvas_height / height
+            };
+        }
+
         void release() noexcept
         {
-            if (!initialized)
-                return;
-
             if (vertex_buffer != 0)
                 gl.delete_buffers(1, &vertex_buffer);
             if (vertex_array != 0)
@@ -794,30 +575,518 @@ void main()
             canvas_uniform = gl.get_uniform_location(program, "uCanvas");
             color_uniform = gl.get_uniform_location(program, "uColor");
             if (canvas_uniform < 0 || color_uniform < 0)
+            {
+                release();
                 return false;
+            }
 
             gl.gen_vertex_arrays(1, &vertex_array);
             gl.bind_vertex_array(vertex_array);
             gl.gen_buffers(1, &vertex_buffer);
             gl.bind_buffer(GL_ARRAY_BUFFER, vertex_buffer);
             gl.enable_vertex_attrib_array(0);
-            gl.vertex_attrib_pointer(
-                0,
-                2,
-                GL_FLOAT,
-                GL_FALSE,
-                static_cast<GLsizei>(sizeof(gui::Vec2)),
-                nullptr);
-            gl.bind_vertex_array(0);
+            gl.vertex_attrib_pointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(gui::Vec2), nullptr);
 
             initialized = vertex_array != 0 && vertex_buffer != 0;
+            if (!initialized)
+                release();
             return initialized;
         }
 
-        void resize(int width, int height) noexcept
+        [[nodiscard]] gui::FloatingWindowOptions window_options(
+            gui::Vec2 default_position,
+            gui::Vec2 default_size) const noexcept
         {
-            framebuffer_width = (std::max)(1, width);
-            framebuffer_height = (std::max)(1, height);
+            return {
+                .default_position = default_position,
+                .default_size = default_size,
+                .min_size = { 270.0f, 190.0f },
+                .viewport_size = { canvas_width, canvas_height },
+                .title_bar_height = 32.0f,
+                .content_padding = 10.0f,
+                .movable = true,
+                .resizable = true,
+                .closable = true
+            };
+        }
+
+        void clamp_window_to_workspace(gui::FloatingWindowState& state) noexcept
+        {
+            state.position.y = (std::max)(state.position.y, workspace_top + 8.0f);
+            state.position.x = (std::max)(state.position.x, 228.0f);
+        }
+
+        void update_sidebar(const input::InputFrame& frame) noexcept
+        {
+            const gui::SelectableListLayoutOptions options{
+                .viewport = { { 18.0f, 156.0f }, { 188.0f, 232.0f } },
+                .row_count = 5,
+                .row_height = 36.0f,
+                .row_gap = 5.0f,
+                .scroll_offset = 0.0f,
+                .content_padding_x = 8.0f,
+                .content_padding_y = 8.0f
+            };
+
+            if (frame.pointer(input::PointerButton::left).released)
+            {
+                const std::uint32_t row = gui::selectable_row_index_at(options, frame.pointer_position);
+                if (row != gui::invalid_selectable_row_index)
+                    selected_sidebar_row = row;
+            }
+        }
+
+        void update_display_toggle(const input::InputFrame& frame) noexcept
+        {
+            constexpr std::array<float, 3> widths{ 92.0f, 102.0f, 92.0f };
+            const gui::SegmentedControlLayoutOptions options{
+                .position = { 254.0f, 67.0f },
+                .item_widths = widths,
+                .height = 32.0f,
+                .gap = 4.0f
+            };
+
+            if (frame.pointer(input::PointerButton::left).released)
+            {
+                const std::uint32_t item = gui::segmented_control_item_at(options, frame.pointer_position);
+                if (item != gui::invalid_selectable_row_index)
+                    display_mode = item;
+            }
+        }
+
+        [[nodiscard]] int press_target(const input::InputFrame& frame) const noexcept
+        {
+            if (!frame.pointer(input::PointerButton::left).pressed)
+                return 0;
+            if (context_layout.visible && gui::contains(context_layout.popup, frame.pointer_position))
+                return 0;
+
+            const bool in_core = core_window.open
+                && display_mode != 1
+                && gui::contains({ core_window.position, core_window.size }, frame.pointer_position);
+            const bool in_rounded = rounded_window.open
+                && display_mode != 0
+                && gui::contains({ rounded_window.position, rounded_window.size }, frame.pointer_position);
+
+            if (in_core && in_rounded)
+                return core_window.focus_order > rounded_window.focus_order ? 1 : 2;
+            if (in_core)
+                return 1;
+            if (in_rounded)
+                return 2;
+            return 0;
+        }
+
+        void update_floating_windows(const input::InputFrame& frame) noexcept
+        {
+            const int target = press_target(frame);
+            const gui::FloatingWindowInput actual = input::floating_window_input(frame);
+
+            gui::FloatingWindowInput core_input = actual;
+            gui::FloatingWindowInput rounded_input = actual;
+
+            const bool core_captured = core_window.dragging || core_window.resizing || target == 1;
+            const bool rounded_captured = rounded_window.dragging || rounded_window.resizing || target == 2;
+
+            if (!core_captured)
+            {
+                core_input.mouse_down = false;
+                core_input.mouse_pressed = false;
+                core_input.mouse_released = false;
+            }
+            if (!rounded_captured)
+            {
+                rounded_input.mouse_down = false;
+                rounded_input.mouse_pressed = false;
+                rounded_input.mouse_released = false;
+            }
+
+            if (display_mode != 1)
+            {
+                core_layout = gui::update_floating_window(
+                    core_window,
+                    window_options({ 292.0f, 196.0f }, { 390.0f, 258.0f }),
+                    core_input);
+                clamp_window_to_workspace(core_window);
+                if (core_layout.focused)
+                    core_window.focus_order = next_focus_order++;
+            }
+            else
+            {
+                core_layout = {};
+            }
+
+            if (display_mode != 0)
+            {
+                rounded_layout = gui::update_floating_window(
+                    rounded_window,
+                    window_options({ 650.0f, 300.0f }, { 410.0f, 276.0f }),
+                    rounded_input);
+                clamp_window_to_workspace(rounded_window);
+                if (rounded_layout.focused)
+                    rounded_window.focus_order = next_focus_order++;
+            }
+            else
+            {
+                rounded_layout = {};
+            }
+        }
+
+        void apply_context_action(std::uint32_t item) noexcept
+        {
+            switch (item)
+            {
+            case 0:
+                core_window.open = true;
+                core_window.position = { context_anchor.x, (std::max)(workspace_top + 8.0f, context_anchor.y) };
+                core_window.focus_order = next_focus_order++;
+                break;
+            case 1:
+                rounded_window.open = true;
+                rounded_window.position = { context_anchor.x, (std::max)(workspace_top + 8.0f, context_anchor.y) };
+                rounded_window.focus_order = next_focus_order++;
+                break;
+            case 2:
+                reset_windows();
+                break;
+            default:
+                break;
+            }
+            context_popup.open = false;
+        }
+
+        void update_context_menu(const input::InputFrame& frame) noexcept
+        {
+            const gui::Rect workspace{ { 220.0f, workspace_top }, { canvas_width - 220.0f, canvas_height - workspace_top } };
+            const input::ContextMenuRequest request = input::context_menu_request(frame, workspace);
+            if (request.requested)
+                context_anchor = request.position;
+
+            const gui::PopupOptions options{
+                .owner = { context_anchor, { 1.0f, 1.0f } },
+                .preferred_size = { 230.0f, 126.0f },
+                .viewport_size = { canvas_width, canvas_height },
+                .cursor_offset = { 0.0f, 0.0f },
+                .placement = gui::PopupPlacement::below,
+                .gap = 0.0f,
+                .margin = 8.0f,
+                .flip_to_fit = true,
+                .clamp_to_viewport = true,
+                .close_on_outside_press = true
+            };
+
+            context_layout = gui::update_popup(
+                context_popup,
+                options,
+                input::popup_input(frame, request.requested));
+
+            if (context_layout.visible && frame.pointer(input::PointerButton::left).released)
+            {
+                for (std::uint32_t item = 0; item < 3; ++item)
+                {
+                    const gui::Rect item_rect{
+                        {
+                            context_layout.popup.position.x + 10.0f,
+                            context_layout.popup.position.y + 10.0f + static_cast<float>(item) * 36.0f
+                        },
+                        { context_layout.popup.size.x - 20.0f, 30.0f }
+                    };
+                    if (gui::contains(item_rect, frame.pointer_position))
+                    {
+                        apply_context_action(item);
+                        break;
+                    }
+                }
+            }
+        }
+
+        void update_ui() noexcept
+        {
+            const input::InputFrame& frame = input_tracker.frame();
+
+            const input::WindowCommand command = input::borderless_window_command(chrome_layout, frame);
+            if (command != input::WindowCommand::none)
+                pending_window_command = command;
+
+            update_sidebar(frame);
+            update_display_toggle(frame);
+            update_context_menu(frame);
+            update_floating_windows(frame);
+
+            if (frame.key(input::Key::tab).pressed)
+                display_mode = (display_mode + 1U) % 3U;
+            if (frame.key(input::Key::escape).pressed && !context_popup.open)
+                reset_windows();
+        }
+
+        void draw_native_title_bar(const input::InputFrame& frame)
+        {
+            batch.append_rect(chrome_layout.title_bar, title_fill);
+            batch.append_rect({ { 0.0f, native_title_height - 1.0f }, { canvas_width, 1.0f } }, panel_border);
+            draw_text(batch, 20.0f, 18.0f, "EPOCHGUI LIVE DEMO", 2.3f, text_primary);
+            draw_text(batch, 292.0f, 22.0f, "BORDERLESS REPLACEMENT TITLE BAR", 1.35f, text_secondary);
+
+            const input::WindowChromeRegion hovered = input::hit_test_borderless_window_chrome(
+                chrome_layout,
+                frame.pointer_position);
+
+            const auto draw_button = [&](gui::Rect rect, input::WindowChromeRegion region, Color active, std::string_view label)
+            {
+                const bool is_hovered = hovered == region;
+                batch.append_rect(rect, is_hovered ? active : title_fill);
+                draw_text(batch, rect.position.x + 17.0f, rect.position.y + 20.0f, label, 1.35f,
+                    is_hovered ? text_primary : text_secondary);
+            };
+
+            draw_button(chrome_layout.minimize_button, input::WindowChromeRegion::minimize_button, control_hover, "-");
+            draw_button(chrome_layout.maximize_button, input::WindowChromeRegion::maximize_button, control_hover, "O");
+            draw_button(chrome_layout.close_button, input::WindowChromeRegion::close_button, danger, "X");
+        }
+
+        void draw_toolbar(const input::InputFrame& frame)
+        {
+            batch.append_rect({ { 0.0f, native_title_height }, { canvas_width, toolbar_height } }, toolbar_fill);
+            batch.append_rect({ { 0.0f, workspace_top - 1.0f }, { canvas_width, 1.0f } }, panel_border);
+
+            draw_text(batch, 22.0f, 75.0f, "WINDOW STYLE", 1.4f, text_secondary);
+
+            constexpr std::array<float, 3> widths{ 92.0f, 102.0f, 92.0f };
+            const gui::SegmentedControlLayoutOptions options{
+                .position = { 254.0f, 67.0f },
+                .item_widths = widths,
+                .height = 32.0f,
+                .gap = 4.0f
+            };
+            constexpr std::array<std::string_view, 3> labels{ "RECT", "ROUNDED", "BOTH" };
+
+            for (std::uint32_t index = 0; index < labels.size(); ++index)
+            {
+                const gui::Rect item = gui::segmented_control_item_layout(options, index);
+                const bool hovered = gui::contains(item, frame.pointer_position);
+                const bool selected = display_mode == index;
+                draw_surface(batch, item, true, 7.0f,
+                    selected ? control_selected : hovered ? control_hover : control_fill,
+                    selected ? accent : panel_border,
+                    1.0f);
+                draw_text(batch, item.position.x + 16.0f, item.position.y + 11.0f,
+                    labels[index], 1.35f, selected ? text_primary : text_secondary);
+            }
+
+            draw_surface(batch, { { 585.0f, 67.0f }, { 202.0f, 32.0f } }, true, 16.0f,
+                accent_soft, accent, 1.0f);
+            draw_text(batch, 604.0f, 78.0f, "INPUT FALLBACK ON", 1.35f, text_primary);
+            draw_text(batch, 824.0f, 77.0f, "RIGHT CLICK WORKSPACE - TAB CHANGES MODE", 1.2f, text_muted);
+        }
+
+        void draw_sidebar(const input::InputFrame& frame)
+        {
+            batch.append_rect({ { 0.0f, workspace_top }, { 220.0f, canvas_height - workspace_top } }, sidebar_fill);
+            batch.append_rect({ { 219.0f, workspace_top }, { 1.0f, canvas_height - workspace_top } }, panel_border);
+            draw_text(batch, 18.0f, 132.0f, "EPOCHGUI FEATURES", 1.55f, text_primary);
+
+            const gui::SelectableListLayoutOptions options{
+                .viewport = { { 18.0f, 156.0f }, { 188.0f, 232.0f } },
+                .row_count = 5,
+                .row_height = 36.0f,
+                .row_gap = 5.0f,
+                .scroll_offset = 0.0f,
+                .content_padding_x = 8.0f,
+                .content_padding_y = 8.0f
+            };
+            constexpr std::array<std::string_view, 5> labels{
+                "LAYOUT", "FLOATING", "POPUPS", "INPUT", "CHROME"
+            };
+
+            for (std::uint32_t index = 0; index < labels.size(); ++index)
+            {
+                const gui::SelectableRowLayout row = gui::make_selectable_row_layout(
+                    options,
+                    index,
+                    frame.pointer_position,
+                    selected_sidebar_row == index);
+                if (!row.visible)
+                    continue;
+
+                draw_surface(batch, row.row, true, 7.0f,
+                    row.selected ? control_selected : row.hovered ? control_hover : control_fill,
+                    row.selected ? accent : panel_border,
+                    row.selected ? 1.0f : 0.0f);
+                draw_text(batch, row.content.position.x + 8.0f, row.content.position.y + 11.0f,
+                    labels[index], 1.45f, row.selected ? text_primary : text_secondary);
+            }
+
+            draw_text(batch, 18.0f, 424.0f, "LIVE INPUT", 1.35f, text_secondary);
+            draw_text(batch, 18.0f, 452.0f,
+                frame.pointer(input::PointerButton::left).down ? "LEFT DOWN" : "LEFT UP",
+                1.35f,
+                frame.pointer(input::PointerButton::left).down ? green : text_muted);
+            draw_text(batch, 18.0f, 476.0f,
+                frame.pointer(input::PointerButton::right).down ? "RIGHT DOWN" : "RIGHT UP",
+                1.35f,
+                frame.pointer(input::PointerButton::right).down ? warning : text_muted);
+            draw_text(batch, 18.0f, 516.0f, "DRAG TITLE BARS", 1.2f, text_muted);
+            draw_text(batch, 18.0f, 538.0f, "RESIZE CORNERS", 1.2f, text_muted);
+            draw_text(batch, 18.0f, 560.0f, "CLOSE AND REOPEN", 1.2f, text_muted);
+            draw_text(batch, 18.0f, 582.0f, "FROM RIGHT CLICK", 1.2f, text_muted);
+        }
+
+        void draw_window_content(gui::Rect content, bool use_rounded)
+        {
+            draw_text(batch, content.position.x + 8.0f, content.position.y + 8.0f,
+                use_rounded ? "OPTIONAL ROUNDED GEOMETRY" : "CORE RECTANGULAR FALLBACK",
+                1.25f,
+                use_rounded ? green : accent);
+
+            const gui::ProgressBarLayout progress = gui::make_progress_bar_layout({
+                .track = {
+                    { content.position.x + 8.0f, content.position.y + 38.0f },
+                    { (std::max)(80.0f, content.size.x - 16.0f), 22.0f }
+                },
+                .value = use_rounded ? 0.76f : 0.54f,
+                .minimum = 0.0f,
+                .maximum = 1.0f,
+                .padding = 3.0f,
+                .direction = gui::ProgressBarDirection::left_to_right
+            });
+            draw_surface(batch, progress.track, use_rounded, 7.0f, background, panel_border, 1.0f);
+            draw_surface(batch, progress.fill, use_rounded, 5.0f,
+                use_rounded ? green : accent,
+                use_rounded ? green : accent,
+                0.0f);
+
+            const gui::SplitterLayout split = gui::make_splitter_layout({
+                .area = {
+                    { content.position.x + 8.0f, content.position.y + 76.0f },
+                    { (std::max)(120.0f, content.size.x - 16.0f), (std::max)(72.0f, content.size.y - 86.0f) }
+                },
+                .axis = gui::SplitterAxis::vertical,
+                .split_fraction = 0.36f,
+                .thickness = 6.0f,
+                .min_before = 70.0f,
+                .min_after = 90.0f
+            });
+            draw_surface(batch, split.before, use_rounded, 6.0f, background, panel_border, 1.0f);
+            draw_surface(batch, split.after, use_rounded, 6.0f, control_fill, panel_border, 1.0f);
+            draw_surface(batch, split.handle, use_rounded, 3.0f, accent_soft, accent_soft, 0.0f);
+            draw_text(batch, split.before.position.x + 10.0f, split.before.position.y + 12.0f,
+                "TREE", 1.25f, text_secondary);
+            draw_text(batch, split.after.position.x + 10.0f, split.after.position.y + 12.0f,
+                "CONTENT", 1.25f, text_secondary);
+        }
+
+        void draw_floating_window(
+            const gui::FloatingWindowState& state,
+            const gui::FloatingWindowLayout& layout,
+            bool use_rounded,
+            bool active)
+        {
+            if (!state.open || !layout.visible)
+                return;
+
+            draw_surface(batch, layout.window, use_rounded, 11.0f,
+                panel_fill,
+                active ? accent : panel_border,
+                active ? 2.0f : 1.0f);
+            draw_surface(batch, layout.title_bar, use_rounded, 10.0f,
+                active ? control_selected : control_fill,
+                active ? control_selected : control_fill,
+                0.0f);
+            batch.append_rect({
+                { layout.title_bar.position.x, layout.title_bar.position.y + layout.title_bar.size.y - 8.0f },
+                { layout.title_bar.size.x, 8.0f }
+            }, active ? control_selected : control_fill);
+
+            draw_text(batch, layout.title_bar.position.x + 12.0f, layout.title_bar.position.y + 11.0f,
+                use_rounded ? "ROUNDED WINDOW" : "CORE WINDOW",
+                1.45f,
+                text_primary);
+
+            draw_surface(batch, layout.close_button, true, 6.0f,
+                layout.close_hovered ? danger : accent_soft,
+                layout.close_hovered ? danger : accent_soft,
+                0.0f);
+            draw_text(batch, layout.close_button.position.x + 8.0f, layout.close_button.position.y + 8.0f,
+                "X", 1.15f, text_primary);
+
+            draw_window_content(layout.content, use_rounded);
+
+            draw_surface(batch, layout.resize_handle, false, 0.0f,
+                layout.resize_hovered ? warning : panel_border,
+                panel_border,
+                0.0f);
+        }
+
+        void draw_context_menu(const input::InputFrame& frame)
+        {
+            if (!context_layout.visible)
+                return;
+
+            draw_surface(batch, context_layout.popup, true, 10.0f, panel_fill, accent, 1.5f);
+            constexpr std::array<std::string_view, 3> labels{
+                "OPEN CORE WINDOW", "OPEN ROUNDED WINDOW", "RESET LAYOUT"
+            };
+
+            for (std::uint32_t index = 0; index < labels.size(); ++index)
+            {
+                const gui::Rect item{
+                    {
+                        context_layout.popup.position.x + 10.0f,
+                        context_layout.popup.position.y + 10.0f + static_cast<float>(index) * 36.0f
+                    },
+                    { context_layout.popup.size.x - 20.0f, 30.0f }
+                };
+                const bool hovered = gui::contains(item, frame.pointer_position);
+                draw_surface(batch, item, true, 6.0f,
+                    hovered ? control_hover : background,
+                    hovered ? accent_soft : background,
+                    0.0f);
+                draw_text(batch, item.position.x + 10.0f, item.position.y + 10.0f,
+                    labels[index], 1.2f, hovered ? text_primary : text_secondary);
+            }
+        }
+
+        void build_scene()
+        {
+            batch.clear();
+            batch.vertices.reserve(30000);
+            batch.commands.reserve(2200);
+
+            const input::InputFrame& frame = input_tracker.frame();
+            batch.append_rect({ { 0.0f, 0.0f }, { canvas_width, canvas_height } }, background);
+            draw_native_title_bar(frame);
+            draw_toolbar(frame);
+            draw_sidebar(frame);
+            batch.append_rect({
+                { 220.0f, workspace_top },
+                { canvas_width - 220.0f, canvas_height - workspace_top }
+            }, workspace_fill);
+
+            draw_text(batch, 246.0f, 132.0f,
+                "LIVE WORKSPACE - WINDOWS USE EPOCHGUI STATE AND HIT TESTING",
+                1.35f,
+                text_muted);
+
+            const bool core_active = core_window.focus_order >= rounded_window.focus_order;
+            if (core_active)
+            {
+                draw_floating_window(rounded_window, rounded_layout, true, false);
+                draw_floating_window(core_window, core_layout, false, true);
+            }
+            else
+            {
+                draw_floating_window(core_window, core_layout, false, false);
+                draw_floating_window(rounded_window, rounded_layout, true, true);
+            }
+
+            if (!core_window.open && !rounded_window.open)
+            {
+                draw_surface(batch, { { 430.0f, 330.0f }, { 520.0f, 150.0f } }, true, 14.0f,
+                    panel_fill, panel_border, 1.0f);
+                draw_text(batch, 482.0f, 372.0f, "ALL WINDOWS CLOSED", 2.0f, warning);
+                draw_text(batch, 470.0f, 414.0f, "RIGHT CLICK TO REOPEN OR RESET", 1.35f, text_secondary);
+            }
+
+            draw_context_menu(frame);
         }
 
         void render() noexcept
@@ -825,44 +1094,23 @@ void main()
             if (!initialized)
                 return;
 
-            build_scene(scene);
+            update_ui();
+            build_scene();
 
             gl.viewport(0, 0, framebuffer_width, framebuffer_height);
             gl.clear_color(background.r, background.g, background.b, background.a);
             gl.clear(GL_COLOR_BUFFER_BIT);
-
-            const float target_aspect = canvas_width / canvas_height;
-            const float framebuffer_aspect =
-                static_cast<float>(framebuffer_width) / static_cast<float>(framebuffer_height);
-
-            int viewport_width = framebuffer_width;
-            int viewport_height = framebuffer_height;
-            int viewport_x = 0;
-            int viewport_y = 0;
-
-            if (framebuffer_aspect > target_aspect)
-            {
-                viewport_width = static_cast<int>(static_cast<float>(framebuffer_height) * target_aspect);
-                viewport_x = (framebuffer_width - viewport_width) / 2;
-            }
-            else
-            {
-                viewport_height = static_cast<int>(static_cast<float>(framebuffer_width) / target_aspect);
-                viewport_y = (framebuffer_height - viewport_height) / 2;
-            }
-
-            gl.viewport(viewport_x, viewport_y, viewport_width, viewport_height);
             gl.use_program(program);
             gl.uniform_2f(canvas_uniform, canvas_width, canvas_height);
             gl.bind_vertex_array(vertex_array);
             gl.bind_buffer(GL_ARRAY_BUFFER, vertex_buffer);
             gl.buffer_data(
                 GL_ARRAY_BUFFER,
-                static_cast<GLsizeiptr>(scene.vertices.size() * sizeof(gui::Vec2)),
-                scene.vertices.data(),
+                static_cast<GLsizeiptr>(batch.vertices.size() * sizeof(gui::Vec2)),
+                batch.vertices.empty() ? nullptr : batch.vertices.data(),
                 GL_DYNAMIC_DRAW);
 
-            for (const DrawCommand& command : scene.commands)
+            for (const DrawCommand& command : batch.commands)
             {
                 gl.uniform_4f(
                     color_uniform,
@@ -873,8 +1121,7 @@ void main()
                 gl.draw_arrays(GL_TRIANGLES, command.first, command.count);
             }
 
-            gl.bind_vertex_array(0);
-            gl.use_program(0);
+            input_tracker.finish_frame();
         }
     };
 
@@ -894,13 +1141,61 @@ void main()
 
     void OpenGLRenderer::resize(int width, int height) noexcept
     {
+        if (!impl_)
+            return;
+        impl_->framebuffer_width = (std::max)(1, width);
+        impl_->framebuffer_height = (std::max)(1, height);
+    }
+
+    void OpenGLRenderer::pointer_move(float x, float y) noexcept
+    {
         if (impl_)
-            impl_->resize(width, height);
+            impl_->input_tracker.set_pointer_position(impl_->to_canvas(x, y));
+    }
+
+    void OpenGLRenderer::pointer_button(PointerButton button, bool down) noexcept
+    {
+        if (impl_)
+            impl_->input_tracker.set_pointer_button(button, down);
+    }
+
+    void OpenGLRenderer::wheel(float horizontal, float vertical) noexcept
+    {
+        if (impl_)
+            impl_->input_tracker.add_wheel_delta({ horizontal, vertical });
+    }
+
+    void OpenGLRenderer::key(Key key_code, bool down, bool repeated) noexcept
+    {
+        if (impl_)
+            impl_->input_tracker.set_key(key_code, down, repeated);
+    }
+
+    void OpenGLRenderer::modifiers(input::ModifierState state) noexcept
+    {
+        if (impl_)
+            impl_->input_tracker.set_modifiers(state);
     }
 
     void OpenGLRenderer::render() noexcept
     {
         if (impl_)
             impl_->render();
+    }
+
+    WindowChromeRegion OpenGLRenderer::window_chrome_hit_test(float x, float y) const noexcept
+    {
+        if (!impl_)
+            return WindowChromeRegion::client;
+        return input::hit_test_borderless_window_chrome(
+            impl_->chrome_layout,
+            impl_->to_canvas(x, y));
+    }
+
+    WindowCommand OpenGLRenderer::take_window_command() noexcept
+    {
+        if (!impl_)
+            return WindowCommand::none;
+        return std::exchange(impl_->pending_window_command, WindowCommand::none);
     }
 }
