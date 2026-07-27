@@ -15,7 +15,7 @@ try {
 
     $Selected = (Get-Content "$Root\build\.active_generator" -Raw).Trim()
     $BuildDirectory = "$Root\build\$Selected"
-    $Executable = "$BuildDirectory\$Configuration\EpochGuiRoundedCorners.exe"
+    $Executable = "$BuildDirectory\$Configuration\EpochGuiDemo.exe"
 
     & cmake --build $BuildDirectory --config $Configuration --parallel
     if ($LASTEXITCODE -ne 0) {
@@ -24,7 +24,7 @@ try {
 
     & ctest --test-dir $BuildDirectory -C $Configuration --output-on-failure
     if ($LASTEXITCODE -ne 0) {
-        throw "Geometry contract tests failed with exit code $LASTEXITCODE."
+        throw "EpochGui tests failed with exit code $LASTEXITCODE."
     }
 
     if (-not (Test-Path $Executable)) {
