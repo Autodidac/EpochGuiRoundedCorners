@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <dwmapi.h>
 
 #include <GL/gl.h>
 
@@ -48,13 +49,56 @@ namespace
     {
         if (!name)
             return nullptr;
-
         if (const auto system_proc = system_opengl_proc(name))
             return system_proc;
 
-        const auto address = reinterpret_cast<epoch_gui_demo_gl_proc>(
-            wglGetProcAddress(name));
+        const auto address = reinterpret_cast<epoch_gui_demo_gl_proc>(wglGetProcAddress(name));
         return invalid_wgl_address(address) ? nullptr : address;
+    }
+
+    [[nodiscard]] int key_from_virtual_key(WPARAM key) noexcept
+    {
+        switch (key)
+        {
+        case VK_ESCAPE: return EPOCH_GUI_DEMO_KEY_ESCAPE;
+        case VK_RETURN: return EPOCH_GUI_DEMO_KEY_ENTER;
+        case VK_TAB: return EPOCH_GUI_DEMO_KEY_TAB;
+        case VK_SPACE: return EPOCH_GUI_DEMO_KEY_SPACE;
+        case VK_BACK: return EPOCH_GUI_DEMO_KEY_BACKSPACE;
+        case VK_DELETE: return EPOCH_GUI_DEMO_KEY_DELETE;
+        case VK_LEFT: return EPOCH_GUI_DEMO_KEY_LEFT;
+        case VK_RIGHT: return EPOCH_GUI_DEMO_KEY_RIGHT;
+        case VK_UP: return EPOCH_GUI_DEMO_KEY_UP;
+        case VK_DOWN: return EPOCH_GUI_DEMO_KEY_DOWN;
+        case VK_HOME: return EPOCH_GUI_DEMO_KEY_HOME;
+        case VK_END: return EPOCH_GUI_DEMO_KEY_END;
+        case VK_SHIFT: return EPOCH_GUI_DEMO_KEY_SHIFT;
+        case VK_CONTROL: return EPOCH_GUI_DEMO_KEY_CONTROL;
+        case VK_MENU: return EPOCH_GUI_DEMO_KEY_ALT;
+        case VK_LWIN:
+        case VK_RWIN:
+            return EPOCH_GUI_DEMO_KEY_SUPER;
+        default:
+            return -1;
+        }
+    }
+
+    [[nodiscard]] LRESULT native_hit_test_from(int region) noexcept
+    {
+        switch (region)
+        {
+        case EPOCH_GUI_DEMO_WINDOW_CAPTION: return HTCAPTION;
+        case EPOCH_GUI_DEMO_WINDOW_RESIZE_LEFT: return HTLEFT;
+        case EPOCH_GUI_DEMO_WINDOW_RESIZE_RIGHT: return HTRIGHT;
+        case EPOCH_GUI_DEMO_WINDOW_RESIZE_TOP: return HTTOP;
+        case EPOCH_GUI_DEMO_WINDOW_RESIZE_BOTTOM: return HTBOTTOM;
+        case EPOCH_GUI_DEMO_WINDOW_RESIZE_TOP_LEFT: return HTTOPLEFT;
+        case EPOCH_GUI_DEMO_WINDOW_RESIZE_TOP_RIGHT: return HTTOPRIGHT;
+        case EPOCH_GUI_DEMO_WINDOW_RESIZE_BOTTOM_LEFT: return HTBOTTOMLEFT;
+        case EPOCH_GUI_DEMO_WINDOW_RESIZE_BOTTOM_RIGHT: return HTBOTTOMRIGHT;
+        default:
+            return HTCLIENT;
+        }
     }
 
     class WindowsApplication final
@@ -68,8 +112,8 @@ namespace
         [[nodiscard]] bool initialize(HINSTANCE instance)
         {
             instance_ = instance;
+            constexpr wchar_t class_name[] = L"EpochGuiLiveDemoOpenGL";
 
-            constexpr wchar_t class_name[] = L"EpochGuiDemoOpenGL";
             WNDCLASSEXW window_class{};
             window_class.cbSize = sizeof(window_class);
             window_class.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
@@ -86,8 +130,12 @@ namespace
                 return false;
             }
 
+            constexpr DWORD style = WS_POPUP
+                | WS_THICKFRAME
+                | WS_MINIMIZEBOX
+                | WS_MAXIMIZEBOX
+                | WS_SYSMENU;
             RECT frame{ 0, 0, 1280, 820 };
-            constexpr DWORD style = WS_OVERLAPPEDWINDOW;
             if (!AdjustWindowRectEx(&frame, style, FALSE, 0))
                 return false;
 
@@ -99,7 +147,7 @@ namespace
             window_ = CreateWindowExW(
                 0,
                 class_name,
-                L"EpochGui Demo - Core and Optional Features",
+                L"EpochGui Live Demo",
                 style,
                 x,
                 y,
@@ -112,6 +160,9 @@ namespace
             if (!window_)
                 return false;
 
+            const MARGINS margins{ 1, 1, 1, 1 };
+            DwmExtendFrameIntoClientArea(window_, &margins);
+
             device_context_ = GetDC(window_);
             if (!device_context_ || !create_opengl_context())
                 return false;
@@ -122,13 +173,11 @@ namespace
 
             RECT client{};
             GetClientRect(window_, &client);
-            epoch_gui_demo_resize(
-                renderer_,
-                client.right - client.left,
-                client.bottom - client.top);
+            epoch_gui_demo_resize(renderer_, client.right - client.left, client.bottom - client.top);
 
             ShowWindow(window_, SW_SHOWNORMAL);
             UpdateWindow(window_);
+            render_and_apply_commands();
             return true;
         }
 
@@ -189,7 +238,6 @@ namespace
             render_context_ = create_context(device_context_, nullptr, attributes);
             wglMakeCurrent(nullptr, nullptr);
             wglDeleteContext(legacy_context);
-
             if (!render_context_ || !wglMakeCurrent(device_context_, render_context_))
                 return false;
 
@@ -197,7 +245,6 @@ namespace
                 wglGetProcAddress("wglSwapIntervalEXT"));
             if (swap_interval)
                 swap_interval(1);
-
             return true;
         }
 
@@ -219,7 +266,6 @@ namespace
                 wglDeleteContext(render_context_);
                 render_context_ = nullptr;
             }
-
             if (device_context_ && window_)
             {
                 ReleaseDC(window_, device_context_);
@@ -227,13 +273,61 @@ namespace
             }
         }
 
-        void render()
+        void update_modifiers()
+        {
+            if (!renderer_)
+                return;
+            epoch_gui_demo_modifiers(
+                renderer_,
+                (GetKeyState(VK_SHIFT) & 0x8000) != 0,
+                (GetKeyState(VK_CONTROL) & 0x8000) != 0,
+                (GetKeyState(VK_MENU) & 0x8000) != 0,
+                (GetKeyState(VK_LWIN) & 0x8000) != 0 || (GetKeyState(VK_RWIN) & 0x8000) != 0);
+        }
+
+        void render_and_apply_commands()
         {
             if (!renderer_ || !device_context_)
                 return;
 
             epoch_gui_demo_render(renderer_);
             SwapBuffers(device_context_);
+
+            switch (epoch_gui_demo_take_window_command(renderer_))
+            {
+            case EPOCH_GUI_DEMO_COMMAND_MINIMIZE:
+                ShowWindow(window_, SW_MINIMIZE);
+                break;
+            case EPOCH_GUI_DEMO_COMMAND_TOGGLE_MAXIMIZE:
+                ShowWindow(window_, IsZoomed(window_) ? SW_RESTORE : SW_MAXIMIZE);
+                break;
+            case EPOCH_GUI_DEMO_COMMAND_CLOSE:
+                SendMessageW(window_, WM_CLOSE, 0, 0);
+                break;
+            default:
+                break;
+            }
+        }
+
+        void feed_pointer_position(LPARAM lparam)
+        {
+            if (!renderer_)
+                return;
+            epoch_gui_demo_pointer_move(
+                renderer_,
+                static_cast<float>(GET_X_LPARAM(lparam)),
+                static_cast<float>(GET_Y_LPARAM(lparam)));
+        }
+
+        void feed_pointer_button(LPARAM lparam, int button, bool down)
+        {
+            feed_pointer_position(lparam);
+            epoch_gui_demo_pointer_button(renderer_, button, down);
+            if (down)
+                SetCapture(window_);
+            else if (GetCapture() == window_)
+                ReleaseCapture();
+            render_and_apply_commands();
         }
 
         [[nodiscard]] LRESULT handle_message(
@@ -244,14 +338,41 @@ namespace
         {
             switch (message)
             {
+            case WM_NCCALCSIZE:
+                if (wparam != 0)
+                    return 0;
+                break;
+
+            case WM_NCHITTEST:
+            {
+                if (!renderer_)
+                    break;
+                POINT point{ GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
+                ScreenToClient(window, &point);
+                const int region = epoch_gui_demo_window_hit_test(
+                    renderer_,
+                    static_cast<float>(point.x),
+                    static_cast<float>(point.y));
+                return native_hit_test_from(region);
+            }
+
+            case WM_GETMINMAXINFO:
+            {
+                auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
+                info->ptMinTrackSize.x = 880;
+                info->ptMinTrackSize.y = 580;
+                return 0;
+            }
+
             case WM_PAINT:
             {
                 PAINTSTRUCT paint{};
                 BeginPaint(window, &paint);
-                render();
+                render_and_apply_commands();
                 EndPaint(window, &paint);
                 return 0;
             }
+
             case WM_SIZE:
                 if (renderer_)
                 {
@@ -259,25 +380,77 @@ namespace
                         renderer_,
                         static_cast<int>(LOWORD(lparam)),
                         static_cast<int>(HIWORD(lparam)));
-                    InvalidateRect(window, nullptr, FALSE);
+                    render_and_apply_commands();
                 }
                 return 0;
-            case WM_ERASEBKGND:
-                return 1;
+
+            case WM_MOUSEMOVE:
+                feed_pointer_position(lparam);
+                render_and_apply_commands();
+                return 0;
+
+            case WM_LBUTTONDOWN:
+                feed_pointer_button(lparam, EPOCH_GUI_DEMO_POINTER_LEFT, true);
+                return 0;
+            case WM_LBUTTONUP:
+                feed_pointer_button(lparam, EPOCH_GUI_DEMO_POINTER_LEFT, false);
+                return 0;
+            case WM_RBUTTONDOWN:
+                feed_pointer_button(lparam, EPOCH_GUI_DEMO_POINTER_RIGHT, true);
+                return 0;
+            case WM_RBUTTONUP:
+                feed_pointer_button(lparam, EPOCH_GUI_DEMO_POINTER_RIGHT, false);
+                return 0;
+            case WM_MBUTTONDOWN:
+                feed_pointer_button(lparam, EPOCH_GUI_DEMO_POINTER_MIDDLE, true);
+                return 0;
+            case WM_MBUTTONUP:
+                feed_pointer_button(lparam, EPOCH_GUI_DEMO_POINTER_MIDDLE, false);
+                return 0;
+
+            case WM_MOUSEWHEEL:
+            {
+                POINT point{ GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
+                ScreenToClient(window, &point);
+                epoch_gui_demo_pointer_move(renderer_, static_cast<float>(point.x), static_cast<float>(point.y));
+                epoch_gui_demo_wheel(
+                    renderer_,
+                    0.0f,
+                    static_cast<float>(GET_WHEEL_DELTA_WPARAM(wparam)) / static_cast<float>(WHEEL_DELTA));
+                render_and_apply_commands();
+                return 0;
+            }
+
             case WM_KEYDOWN:
-                if (wparam == VK_ESCAPE)
+            case WM_SYSKEYDOWN:
+            case WM_KEYUP:
+            case WM_SYSKEYUP:
+            {
+                const int key = key_from_virtual_key(wparam);
+                if (key >= 0 && renderer_)
                 {
-                    SendMessageW(window, WM_CLOSE, 0, 0);
+                    const bool down = message == WM_KEYDOWN || message == WM_SYSKEYDOWN;
+                    const bool repeated = down && (lparam & (1LL << 30)) != 0;
+                    epoch_gui_demo_key_event(renderer_, key, down, repeated);
+                    update_modifiers();
+                    render_and_apply_commands();
                     return 0;
                 }
                 break;
+            }
+
+            case WM_ERASEBKGND:
+                return 1;
+
             case WM_CLOSE:
                 shutdown_graphics();
                 DestroyWindow(window);
                 return 0;
+
             case WM_DESTROY:
                 PostQuitMessage(0);
                 return 0;
+
             default:
                 break;
             }
@@ -329,10 +502,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
         MessageBoxW(
             nullptr,
             L"OpenGL 3.2 core initialization failed.",
-            L"EpochGui Demo",
+            L"EpochGui Live Demo",
             MB_OK | MB_ICONERROR);
         return 1;
     }
-
     return application.run();
 }
