@@ -2,7 +2,7 @@
 
 A standalone C++23 reference implementation for adding rounded rectangles to EpochGUI.
 
-The project generates reusable triangle meshes for filled and bordered rounded rectangles, then renders those meshes with a small OpenGL demo. It is kept outside EpochEngine so the geometry, API, and rendering behavior can be tested before being moved into the production GUI library.
+The project generates renderer-independent triangle meshes for filled and bordered rounded rectangles, then displays them through a small native OpenGL application. It is kept separate from EpochEngine so the API and rendering behavior can be tested before production integration.
 
 ## Features
 
@@ -10,19 +10,18 @@ The project generates reusable triangle meshes for filled and bordered rounded r
 - Filled rounded rectangles
 - Rounded borders with configurable thickness
 - Pill-shaped controls
-- Automatic proportional radius reduction when adjacent corners overlap
-- Configurable curve tessellation from 1 to 64 segments per corner
+- Proportional radius reduction when adjacent corners overlap
+- Configurable tessellation from 1 to 64 segments per corner
 - Sanitization of negative and non-finite input
 - Deterministic vertices and triangle indices
-- Headless mesh validation and SVG reference output
 
 ## Architecture
 
-### Rounded-rectangle geometry
+### Rounded geometry
 
-`epoch.gui.rounded_rect` is the reusable portion of the project. It imports EpochGUI and operates on its existing `Vec2` and `Rect` types.
+`epoch.gui.rounded_rect` imports EpochGUI and operates on its existing `Vec2` and `Rect` types.
 
-The generated `RoundedRectMesh` contains:
+`RoundedRectMesh` contains:
 
 - Vertex positions
 - Fill triangle indices
@@ -30,23 +29,27 @@ The generated `RoundedRectMesh` contains:
 - Normalized bounds, radii, and border width
 - Outer and inner contour ranges
 
-The mesh is renderer-independent and can be submitted through any EpochGUI backend.
+The generated mesh can be submitted through any EpochGUI rendering backend.
 
-### OpenGL demo renderer
+### OpenGL application
 
-The interactive application uses a shared OpenGL 3.2 core renderer with VAOs, VBOs, index buffers, and small GLSL shaders.
-
-Each operating system provides only the native window and OpenGL context:
+The demonstration application uses one shared OpenGL 3.2 core renderer with native platform hosts:
 
 - Windows: Win32 and WGL
 - Linux: X11 and GLX
 - macOS: Cocoa and the system OpenGL framework
 
-OpenGL functions are loaded directly through the platform context API. No third-party windowing or OpenGL loader library is used.
+No third-party windowing or OpenGL loader library is used.
 
-### Headless validator
+## Windows release
 
-`epoch_gui_rounded_corners_demo` validates the generated meshes and writes an SVG showing the same rounded-corner cases. This provides a renderer-independent test for geometry changes.
+The Windows release contains exactly one application:
+
+```text
+EpochGuiRoundedCorners-v0.1.2-windows-x64.exe
+```
+
+The geometry contract test is used only during the build and is not included in the release.
 
 ## Dependencies
 
@@ -60,13 +63,13 @@ Build requirements:
 - A C++23 compiler with module support
 - Visual Studio 2022 or Ninja
 
-Platform development components:
+Platform components:
 
 - Windows: Windows SDK and `opengl32`
 - Linux: X11 and OpenGL development headers
 - macOS: Cocoa and OpenGL frameworks supplied by macOS
 
-The project does not require GLFW, SDL, SFML, GLAD, GLEW, or another package manager dependency.
+The project does not use GLFW, SDL, SFML, GLAD, GLEW, or another package-manager dependency.
 
 ## Repository layout
 
@@ -75,8 +78,8 @@ include/                         Native host bridge
 modules/                         C++23 module interfaces
 src/rounded_rect.cpp             Rounded geometry implementation
 src/opengl_renderer.cpp          Shared OpenGL renderer
-src/headless_main.cpp            Mesh validator and SVG generator
-src/platform/                    Native Windows, Linux, and macOS hosts
+src/platform/                    Native platform hosts
+tests/geometry_contract.cpp      Internal geometry contract test
 ```
 
 ## EpochEngine checkout
@@ -133,12 +136,10 @@ open build/EpochGuiRoundedCorners.app
 
 ## Integrating into EpochGUI
 
-The intended production integration is:
-
 1. Add `epoch.gui.rounded_rect` and `rounded_rect.cpp` to the EpochGUI library.
 2. Expose a rounded-rectangle draw command through the public GUI API.
-3. Submit the generated vertices and indices through each existing rendering backend.
-4. Keep the current rectangular path as the zero-radius fast path.
+3. Submit the generated vertices and indices through each rendering backend.
+4. Preserve the existing rectangular path as the zero-radius fast path.
 5. Cache meshes by dimensions, corner radii, border width, and tessellation level.
 
-Only the geometry module is intended to become part of EpochGUI. The native hosts, OpenGL demo renderer, and SVG generator are test and reference applications.
+Only the geometry module is intended for production integration. The native hosts and OpenGL renderer are reference code.
