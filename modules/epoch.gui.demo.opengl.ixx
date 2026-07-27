@@ -1,5 +1,6 @@
 module;
 
+#include <algorithm>
 #include <memory>
 #include <string_view>
 
@@ -10,16 +11,55 @@ export import epoch.gui.input;
 
 namespace epochengine::gui_lib
 {
+    [[nodiscard]] inline SplitterLayoutOptions visible_demo_splitter_options(
+        float split_fraction) noexcept
+    {
+        return {
+            .area = { { 250.0f, 610.0f }, { 940.0f, 142.0f } },
+            .axis = SplitterAxis::vertical,
+            .split_fraction = std::clamp(split_fraction, 0.0f, 1.0f),
+            .thickness = 8.0f,
+            .min_before = 180.0f,
+            .min_after = 260.0f
+        };
+    }
+
+    [[nodiscard]] inline float splitter_fraction_from_update_layout(
+        const SplitterLayout& layout) noexcept
+    {
+        constexpr float update_usable_width = 970.0f - 8.0f;
+        return update_usable_width > 0.0f
+            ? std::clamp(layout.before.size.x / update_usable_width, 0.0f, 1.0f)
+            : 0.5f;
+    }
+
     [[nodiscard]] inline bool splitter_hit_test_with_capture(
-        const SplitterLayout& layout,
+        const SplitterLayout& update_layout,
         Vec2 pointer_position,
         float hit_slop,
         bool pointer_pressed) noexcept
     {
         static bool dragging{};
         if (pointer_pressed)
-            dragging = splitter_hit_test(layout, pointer_position, hit_slop);
+        {
+            const SplitterLayout visible_layout = make_splitter_layout(
+                visible_demo_splitter_options(
+                    splitter_fraction_from_update_layout(update_layout)));
+            dragging = splitter_hit_test(
+                visible_layout,
+                pointer_position,
+                hit_slop);
+        }
         return dragging;
+    }
+
+    [[nodiscard]] inline float splitter_fraction_from_visible_point(
+        const SplitterLayoutOptions&,
+        Vec2 pointer_position) noexcept
+    {
+        return splitter_fraction_from_point(
+            visible_demo_splitter_options(0.5f),
+            pointer_position);
     }
 }
 
