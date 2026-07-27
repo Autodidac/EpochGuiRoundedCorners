@@ -58,7 +58,7 @@ add_subdirectory(
 )
 
 add_library(epoch_gui_demo_renderer STATIC
-    src/live_renderer.cpp
+    src/complete_demo_renderer.cpp
     src/app_bridge.cpp
 )
 
@@ -83,7 +83,7 @@ if(WIN32)
     enable_language(RC)
 
     add_executable(epoch_gui_demo_app WIN32
-        src/platform/windows_main.cpp
+        src/platform/complete_windows_main.cpp
         src/platform/windows_resources.rc
         src/platform/windows_message_coords.hpp
     )
@@ -146,6 +146,15 @@ set_target_properties(epoch_gui_demo_app PROPERTIES
 )
 
 target_compile_features(epoch_gui_demo_app PRIVATE cxx_std_23)
+
+add_custom_command(TARGET epoch_gui_demo_app POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:epoch_gui_demo_app>/assets"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/epochgui_demo.ppm"
+        "$<TARGET_FILE_DIR:epoch_gui_demo_app>/assets/epochgui_demo.ppm"
+    VERBATIM
+)
 
 set(_epoch_gui_targets
     epoch_gui_demo_renderer
