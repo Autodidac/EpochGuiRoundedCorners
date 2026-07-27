@@ -96,6 +96,8 @@ if(WIN32)
         OUTPUT_NAME "EpochGuiRoundedCorners"
     )
 
+    set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT epoch_gui_rounded_corners_windows)
+
     target_compile_definitions(epoch_gui_rounded_corners_windows PRIVATE
         UNICODE
         _UNICODE
