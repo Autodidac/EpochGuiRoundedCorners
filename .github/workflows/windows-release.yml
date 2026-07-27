@@ -105,11 +105,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $notes = @"
-          Windows x64 OpenGL 3.2 core demo using native Win32/WGL.
-
-          This release contains exactly one application executable. The geometry validator is CI-only and is not distributed.
-          "@
+          $notes = 'Windows x64 OpenGL 3.2 core demo using native Win32/WGL. This release contains exactly one application executable. The geometry validator is CI-only and is not distributed.'
 
           gh release view $env:RELEASE_TAG *> $null
           if ($LASTEXITCODE -eq 0) {
