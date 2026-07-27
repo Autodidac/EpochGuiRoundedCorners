@@ -1,47 +1,103 @@
 # EpochGui Demo
 
-A cross-platform C++23 feature gallery for [`Autodidac/EpochGui`](https://github.com/Autodidac/EpochGui).
+A cross-platform C++23 live demonstration of [`Autodidac/EpochGui`](https://github.com/Autodidac/EpochGui).
 
-The application renders the same EpochGui layouts in two side-by-side columns:
+The application is an interactive GUI workspace rather than a static screenshot. It uses real EpochGui state, layout, hit testing, popup placement, optional rounded geometry, and the optional fallback input adapter.
 
-- **Core rectangular path** — uses the standard `epoch.gui` layout and state APIs with ordinary rectangular surfaces.
-- **Optional rounded path** — uses the exact same layouts while enabling `epoch.gui.rounded_rect` for rounded fills and borders.
+## Live interactions
 
-This makes the optional geometry visible without confusing it with the core layout system.
+The demo supports:
 
-## Features demonstrated
+- Dragging independent floating windows by their EpochGui title bars
+- Resizing floating windows from their lower-right handles
+- Closing and reopening windows
+- Focus ordering when windows overlap
+- Hover and selection state in a selectable sidebar
+- A live segmented control that switches between rectangular, rounded, and combined views
+- Right-click context menus anchored at the cursor
+- Escape and Tab keyboard behavior
+- Pointer button, wheel, key, and modifier event translation
+- A replacement title bar with minimize, maximize, close, caption, and resize hit regions
 
-The gallery uses real EpochGui calculations for:
+Right-click the workspace to open the context menu. It can reopen either floating window or reset the full layout.
 
-- Segmented-control bounds and item placement
-- Progress-bar track, padding, range, and fill geometry
-- Splitter layout with before, handle, and after regions
-- Selectable-list rows, visible ranges, hover state, and selection state
-- Popup placement and viewport clamping
-- Floating-window title bar, content, close button, and resize handle
-- Loading-screen panel and progress layout
-- Core `Vec2`, `Rect`, and containment primitives
+## Core versus optional features
 
-The right column additionally demonstrates:
+The two floating windows use the same core EpochGui layout APIs:
 
-- Uniform rounded corners
-- Rounded control borders
-- Rounded panels and popup surfaces
-- Pill-style progress fills
-- The optional renderer-neutral `RoundedRectMesh`
+- **Core window:** ordinary rectangular rendering using `epoch.gui`
+- **Rounded window:** the same layouts rendered with `epoch.gui.rounded_rect`
+
+This keeps layout/state behavior separate from optional visual geometry.
+
+## Optional fallback input
+
+Input remains **disabled by default** in the EpochGui library:
+
+```text
+EPOCHGUI_ENABLE_INPUT=OFF
+```
+
+Applications that already have engine, platform, SDL, GLFW, or other input handling should continue using it.
+
+This standalone demo explicitly enables the fallback:
+
+```text
+-DEPOCHGUI_ENABLE_INPUT=ON
+```
+
+and imports:
+
+```cpp
+import epoch.gui.input;
+```
+
+The fallback module only normalizes per-frame input and converts it into existing EpochGui widget inputs. It contains no platform calls. Win32, X11, and Cocoa remain responsible for delivering native events and executing native window commands.
+
+## Borderless replacement title bar
+
+The title bar drawn by the demo is backed by EpochGui's optional input module. EpochGui calculates:
+
+- Caption region
+- Client region
+- Resize edges and corners
+- Minimize button
+- Maximize button
+- Close button
+
+On Windows, those regions are mapped directly through `WM_NCHITTEST`, giving the borderless application normal native moving, resizing, snapping, minimizing, maximizing, and closing behavior.
+
+Linux uses the same regions with `_NET_WM_MOVERESIZE` and `_NET_WM_STATE`. macOS feeds the same UI state through a borderless Cocoa window and native window dragging/actions.
+
+## EpochGui features exercised
+
+The live workspace uses real EpochGui APIs for:
+
+- `FloatingWindowState`, `FloatingWindowInput`, and `update_floating_window`
+- `PopupState`, `PopupInput`, and `update_popup`
+- Selectable-list row calculation and hit testing
+- Segmented-control item placement and hit testing
+- Progress-bar geometry
+- Splitter layouts
+- `Vec2`, `Rect`, and containment tests
+- `RoundedRectMesh`
+- `InputTracker`
+- Right-click context requests
+- Borderless window chrome layout and hit testing
 
 ## Architecture
 
-EpochGui owns the reusable layout, state, hit-testing, and optional rounded-mesh generation.
+EpochGui owns reusable layout, state, hit testing, rounded-mesh generation, and optional normalized fallback input.
 
 This repository owns only:
 
-- A small OpenGL 3.2 core renderer
-- Native Win32/WGL, X11/GLX, and Cocoa hosts
-- A compact built-in bitmap font used to label the gallery
+- Native Win32/WGL, X11/GLX, and Cocoa event translation
+- The OpenGL 3.2 core presentation layer
+- Native execution of minimize, maximize, close, move, and resize commands
+- A compact bitmap font for labels
 - Build scripts and release packaging
 
-The demo does not duplicate EpochGui geometry or layout implementation.
+No EpochGui layout, rounded geometry, or input implementation is duplicated here.
 
 ## EpochGui checkout
 
@@ -55,16 +111,10 @@ Projects/
 
 The demo detects `../EpochGui` automatically.
 
-For another layout, configure with:
+For another layout:
 
 ```text
 -DEPOCHGUI_ROOT=/path/to/EpochGui
-```
-
-The demo enables the optional comparison feature with:
-
-```text
--DEPOCHGUI_ENABLE_ROUNDED_RECT=ON
 ```
 
 ## Build
@@ -84,7 +134,7 @@ Generate and open the best installed Visual Studio version:
 open_msvc.bat
 ```
 
-Build the application and run the EpochGui tests:
+Build the application and run all enabled EpochGui tests:
 
 ```text
 build_msvc.bat Release
@@ -104,14 +154,12 @@ build/vs2022/Release/EpochGuiDemo.exe
 
 ### Linux
 
-GCC preset:
-
 ```bash
 chmod +x build_linux.sh
 ./build_linux.sh linux-gcc-release
 ```
 
-Clang preset:
+or:
 
 ```bash
 ./build_linux.sh linux-clang-release
@@ -141,21 +189,17 @@ open build/macos/EpochGuiDemo.app
 ## Repository layout
 
 ```text
-CMakeLists.txt                     Demo targets and EpochGui integration
+CMakeLists.txt                     Demo targets and optional EpochGui features
 CMakePresets.json                  Windows and Linux presets
 build_msvc.bat/.ps1                Generate, build, test, and locate the executable
 generate_msvc.ps1                 Select Visual Studio 2026 or 2022
 open_msvc.bat/.ps1                Generate and open the solution
 build_linux.sh                    Configure, build, and test Linux presets
-include/epochgui_demo/            Native renderer bridge
-modules/epoch.gui.demo.opengl.ixx Demo renderer module
-src/opengl_renderer.cpp           Side-by-side EpochGui feature gallery
+include/epochgui_demo/            Native renderer/input bridge
+modules/epoch.gui.demo.opengl.ixx Live renderer module interface
+src/live_renderer.cpp             Interactive EpochGui workspace
 src/platform/                     Native Windows, Linux, and macOS hosts
 ```
-
-## Rendering boundary
-
-The demo renderer converts EpochGui `Rect` layouts and optional `RoundedRectMesh` data into OpenGL triangles. EpochGui itself remains independent of OpenGL, platform windows, shaders, fonts, release packaging, and application-specific presentation.
 
 ## Windows release
 
@@ -167,4 +211,4 @@ README.md
 BUILD.txt
 ```
 
-The workflow checks out the current standalone EpochGui repository, enables rounded-rectangle support, builds both projects, runs the EpochGui tests, verifies that the archive contains one executable, and publishes a SHA-256 checksum beside the ZIP.
+The workflow checks out the current standalone EpochGui repository, enables rounded rectangles and fallback input, builds both projects, runs the EpochGui tests, verifies that the archive contains one executable, and publishes a SHA-256 checksum beside the ZIP.
