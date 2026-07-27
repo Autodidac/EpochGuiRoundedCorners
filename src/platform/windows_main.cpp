@@ -39,8 +39,8 @@ namespace
             return reinterpret_cast<epoch_gui_demo_gl_proc>(&::glClear);
         if (std::strcmp(name, "glViewport") == 0)
             return reinterpret_cast<epoch_gui_demo_gl_proc>(&::glViewport);
-        if (std::strcmp(name, "glDrawElements") == 0)
-            return reinterpret_cast<epoch_gui_demo_gl_proc>(&::glDrawElements);
+        if (std::strcmp(name, "glDrawArrays") == 0)
+            return reinterpret_cast<epoch_gui_demo_gl_proc>(&::glDrawArrays);
         return nullptr;
     }
 
@@ -69,7 +69,7 @@ namespace
         {
             instance_ = instance;
 
-            constexpr wchar_t class_name[] = L"EpochGuiRoundedCornersOpenGL";
+            constexpr wchar_t class_name[] = L"EpochGuiDemoOpenGL";
             WNDCLASSEXW window_class{};
             window_class.cbSize = sizeof(window_class);
             window_class.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
@@ -86,7 +86,7 @@ namespace
                 return false;
             }
 
-            RECT frame{ 0, 0, 960, 620 };
+            RECT frame{ 0, 0, 1280, 820 };
             constexpr DWORD style = WS_OVERLAPPEDWINDOW;
             if (!AdjustWindowRectEx(&frame, style, FALSE, 0))
                 return false;
@@ -99,7 +99,7 @@ namespace
             window_ = CreateWindowExW(
                 0,
                 class_name,
-                L"EpochGUI Rounded Corners - OpenGL",
+                L"EpochGui Demo - Core and Optional Features",
                 style,
                 x,
                 y,
@@ -329,7 +329,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
         MessageBoxW(
             nullptr,
             L"OpenGL 3.2 core initialization failed.",
-            L"EpochGUI Rounded Corners",
+            L"EpochGui Demo",
             MB_OK | MB_ICONERROR);
         return 1;
     }
