@@ -112,7 +112,8 @@ jobs:
       - name: Install native build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang ninja-build libx11-dev libgl1-mesa-dev
+          sudo apt-get install -y clang clang-tools ninja-build libx11-dev libgl1-mesa-dev
+          command -v clang-scan-deps || command -v clang-scan-deps-18
 
       - name: Check out rounded-corner demo
         uses: actions/checkout@v4
