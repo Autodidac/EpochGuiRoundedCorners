@@ -16,7 +16,6 @@ namespace
 @interface EpochOpenGLView : NSOpenGLView
 {
     epoch_gui_demo_renderer* renderer_;
-    NSTimer* animation_timer_;
 }
 @end
 
@@ -58,23 +57,6 @@ namespace
     }
 
     [self reshape];
-
-    animation_timer_ = [NSTimer
-        scheduledTimerWithTimeInterval:(1.0 / 60.0)
-        target:self
-        selector:@selector(advanceStartupAnimation:)
-        userInfo:nil
-        repeats:YES];
-}
-
-- (void)advanceStartupAnimation:(NSTimer*)timer
-{
-    [self setNeedsDisplay:YES];
-    if (epoch_gui_demo_startup_animation_complete(renderer_))
-    {
-        [timer invalidate];
-        animation_timer_ = nil;
-    }
 }
 
 - (void)reshape
@@ -113,9 +95,6 @@ namespace
 
 - (void)dealloc
 {
-    [animation_timer_ invalidate];
-    animation_timer_ = nil;
-
     [[self openGLContext] makeCurrentContext];
     epoch_gui_demo_destroy(renderer_);
     renderer_ = nullptr;
