@@ -7,10 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 
-if(MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
-
 if(NOT CMAKE_GENERATOR MATCHES "Ninja|Visual Studio")
     message(FATAL_ERROR "EpochGUI's C++23 module demo requires Ninja or Visual Studio.")
 endif()
@@ -97,23 +93,12 @@ target_link_libraries(epoch_gui_demo_renderer PUBLIC
 
 target_compile_features(epoch_gui_demo_renderer PUBLIC cxx_std_23)
 
-add_executable(epoch_gui_rounded_corners_demo
-    src/headless_main.cpp
-)
-
-set_target_properties(epoch_gui_rounded_corners_demo PROPERTIES
-    CXX_SCAN_FOR_MODULES ON
-)
-
-target_link_libraries(epoch_gui_rounded_corners_demo PRIVATE
-    epoch_gui_rounded_rect
-)
-
-target_compile_features(epoch_gui_rounded_corners_demo PRIVATE cxx_std_23)
-
 if(WIN32)
+    enable_language(RC)
+
     add_executable(epoch_gui_rounded_corners_app WIN32
         src/platform/windows_main.cpp
+        src/platform/windows_resources.rc
     )
 
     target_compile_definitions(epoch_gui_rounded_corners_app PRIVATE
@@ -166,33 +151,47 @@ set_target_properties(epoch_gui_rounded_corners_app PROPERTIES
     OUTPUT_NAME "EpochGuiRoundedCorners"
 )
 
-if(MSVC)
-    foreach(_target IN ITEMS
+target_compile_features(epoch_gui_rounded_corners_app PRIVATE cxx_std_23)
+
+set(_epoch_gui_targets
+    epoch_gui_rounded_rect
+    epoch_gui_demo_renderer
+    epoch_gui_rounded_corners_app
+)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(epoch_gui_rounded_rect_tests
+        tests/geometry_contract.cpp
+    )
+
+    set_target_properties(epoch_gui_rounded_rect_tests PROPERTIES
+        CXX_SCAN_FOR_MODULES ON
+    )
+
+    target_link_libraries(epoch_gui_rounded_rect_tests PRIVATE
         epoch_gui_rounded_rect
-        epoch_gui_demo_renderer
-        epoch_gui_rounded_corners_demo
-        epoch_gui_rounded_corners_app)
+    )
+
+    target_compile_features(epoch_gui_rounded_rect_tests PRIVATE cxx_std_23)
+    list(APPEND _epoch_gui_targets epoch_gui_rounded_rect_tests)
+
+    add_test(
+        NAME epoch_gui_rounded_rect_geometry
+        COMMAND epoch_gui_rounded_rect_tests
+    )
+endif()
+
+if(MSVC)
+    foreach(_target IN LISTS _epoch_gui_targets)
         target_compile_options(${_target} PRIVATE /W4 /permissive- /Zc:__cplusplus)
     endforeach()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    foreach(_target IN ITEMS
-        epoch_gui_rounded_rect
-        epoch_gui_demo_renderer
-        epoch_gui_rounded_corners_demo
-        epoch_gui_rounded_corners_app)
+    foreach(_target IN LISTS _epoch_gui_targets)
         target_compile_options(${_target} PRIVATE -Wall -Wextra -Wpedantic)
     endforeach()
 endif()
 
 if(WIN32)
     set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT epoch_gui_rounded_corners_app)
-endif()
-
-include(CTest)
-if(BUILD_TESTING)
-    add_test(
-        NAME epoch_gui_rounded_corners_demo
-        COMMAND epoch_gui_rounded_corners_demo
-            "${CMAKE_CURRENT_BINARY_DIR}/epochgui_rounded_corners_demo.svg"
-    )
 endif()
