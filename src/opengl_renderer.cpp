@@ -2,12 +2,10 @@ module;
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <utility>
-#include <vector>
 
 module epoch.gui.demo.opengl;
 
@@ -40,11 +38,8 @@ namespace epochengine::gui_demo
         constexpr GLbitfield GL_COLOR_BUFFER_BIT = 0x00004000;
         constexpr GLboolean GL_FALSE = 0;
 
-        constexpr float kCanvasWidth = 940.0f;
-        constexpr float kCanvasHeight = 590.0f;
-        constexpr std::size_t kIndicesPerBorderSegment = 6U;
-        constexpr auto kStartupLeadIn = std::chrono::milliseconds{ 350 };
-        constexpr auto kBorderSegmentDelay = std::chrono::milliseconds{ 25 };
+        constexpr float canvas_width = 940.0f;
+        constexpr float canvas_height = 590.0f;
 
         struct Color
         {
@@ -201,7 +196,6 @@ namespace epochengine::gui_demo
                 gl.delete_shader(shader);
                 return 0;
             }
-
             return shader;
         }
 
@@ -229,13 +223,13 @@ void main()
 )GLSL";
 
             const GLuint vertex_shader = compile_shader(gl, GL_VERTEX_SHADER, vertex_source);
-            if (vertex_shader == 0)
-                return 0;
-
             const GLuint fragment_shader = compile_shader(gl, GL_FRAGMENT_SHADER, fragment_source);
-            if (fragment_shader == 0)
+            if (vertex_shader == 0 || fragment_shader == 0)
             {
-                gl.delete_shader(vertex_shader);
+                if (vertex_shader != 0)
+                    gl.delete_shader(vertex_shader);
+                if (fragment_shader != 0)
+                    gl.delete_shader(fragment_shader);
                 return 0;
             }
 
@@ -251,7 +245,6 @@ void main()
             gl.attach_shader(program, fragment_shader);
             gl.bind_attrib_location(program, 0, "inPosition");
             gl.link_program(program);
-
             gl.delete_shader(fragment_shader);
             gl.delete_shader(vertex_shader);
 
@@ -262,7 +255,6 @@ void main()
                 gl.delete_program(program);
                 return 0;
             }
-
             return program;
         }
 
@@ -296,18 +288,12 @@ void main()
             };
         }
 
-        constexpr std::array<Color, 4> kFillColors{
-            rgb(0x182235),
-            rgb(0x243248),
-            rgb(0x231c32),
-            rgb(0x1b302b)
+        constexpr std::array<Color, 4> fill_colors{
+            rgb(0x182235), rgb(0x243248), rgb(0x231c32), rgb(0x1b302b)
         };
 
-        constexpr std::array<Color, 4> kBorderColors{
-            rgb(0x65a7ff),
-            rgb(0x7dd3fc),
-            rgb(0xc084fc),
-            rgb(0x6ee7b7)
+        constexpr std::array<Color, 4> border_colors{
+            rgb(0x65a7ff), rgb(0x7dd3fc), rgb(0xc084fc), rgb(0x6ee7b7)
         };
     }
 
@@ -318,9 +304,8 @@ void main()
         GLuint program{};
         GLint canvas_uniform{ -1 };
         GLint color_uniform{ -1 };
-        int framebuffer_width{ static_cast<int>(kCanvasWidth) };
-        int framebuffer_height{ static_cast<int>(kCanvasHeight) };
-        std::chrono::steady_clock::time_point startup_animation_started{};
+        int framebuffer_width{ static_cast<int>(canvas_width) };
+        int framebuffer_height{ static_cast<int>(canvas_height) };
         bool initialized{};
 
         ~Impl()
@@ -348,7 +333,6 @@ void main()
 
             if (program != 0)
                 gl.delete_program(program);
-
             program = 0;
             initialized = false;
         }
@@ -407,40 +391,6 @@ void main()
                 && destination.fill_index_buffer != 0;
         }
 
-        [[nodiscard]] std::size_t total_border_segments() const noexcept
-        {
-            std::size_t total = 0;
-            for (const DrawMesh& mesh : meshes)
-            {
-                if (mesh.border_index_count > 0)
-                {
-                    total += static_cast<std::size_t>(mesh.border_index_count)
-                        / kIndicesPerBorderSegment;
-                }
-            }
-            return total;
-        }
-
-        [[nodiscard]] std::size_t revealed_border_segments() const noexcept
-        {
-            if (!initialized)
-                return 0;
-
-            const auto now = std::chrono::steady_clock::now();
-            const auto elapsed = now - startup_animation_started;
-            if (elapsed <= kStartupLeadIn)
-                return 0;
-
-            const auto active_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-                elapsed - kStartupLeadIn);
-            return static_cast<std::size_t>(active_time.count() / kBorderSegmentDelay.count());
-        }
-
-        [[nodiscard]] bool startup_animation_complete() const noexcept
-        {
-            return !initialized || revealed_border_segments() >= total_border_segments();
-        }
-
         [[nodiscard]] bool initialize(OpenGLProcLoader loader) noexcept
         {
             if (initialized)
@@ -466,8 +416,8 @@ void main()
             {
                 const rounded_rect::RoundedRectMesh mesh =
                     rounded_rect::make_rounded_rect_mesh(options[index]);
-                meshes[index].fill = kFillColors[index];
-                meshes[index].border = kBorderColors[index];
+                meshes[index].fill = fill_colors[index];
+                meshes[index].border = border_colors[index];
                 if (!upload_mesh(meshes[index], mesh))
                 {
                     initialized = true;
@@ -477,7 +427,6 @@ void main()
             }
 
             initialized = true;
-            startup_animation_started = std::chrono::steady_clock::now();
             return true;
         }
 
@@ -485,6 +434,32 @@ void main()
         {
             framebuffer_width = (std::max)(1, width);
             framebuffer_height = (std::max)(1, height);
+        }
+
+        void draw(const DrawMesh& mesh) noexcept
+        {
+            gl.bind_vertex_array(mesh.vertex_array);
+
+            gl.uniform_4f(
+                color_uniform,
+                mesh.fill.r,
+                mesh.fill.g,
+                mesh.fill.b,
+                mesh.fill.a);
+            gl.bind_buffer(GL_ELEMENT_ARRAY_BUFFER, mesh.fill_index_buffer);
+            gl.draw_elements(GL_TRIANGLES, mesh.fill_index_count, GL_UNSIGNED_INT, nullptr);
+
+            if (mesh.border_index_count > 0)
+            {
+                gl.uniform_4f(
+                    color_uniform,
+                    mesh.border.r,
+                    mesh.border.g,
+                    mesh.border.b,
+                    mesh.border.a);
+                gl.bind_buffer(GL_ELEMENT_ARRAY_BUFFER, mesh.border_index_buffer);
+                gl.draw_elements(GL_TRIANGLES, mesh.border_index_count, GL_UNSIGNED_INT, nullptr);
+            }
         }
 
         void render() noexcept
@@ -496,7 +471,7 @@ void main()
             gl.clear_color(0.043f, 0.063f, 0.125f, 1.0f);
             gl.clear(GL_COLOR_BUFFER_BIT);
 
-            const float target_aspect = kCanvasWidth / kCanvasHeight;
+            const float target_aspect = canvas_width / canvas_height;
             const float framebuffer_aspect =
                 static_cast<float>(framebuffer_width) / static_cast<float>(framebuffer_height);
 
@@ -518,53 +493,10 @@ void main()
 
             gl.viewport(viewport_x, viewport_y, viewport_width, viewport_height);
             gl.use_program(program);
-            gl.uniform_2f(canvas_uniform, kCanvasWidth, kCanvasHeight);
-
-            std::size_t remaining_border_segments = revealed_border_segments();
+            gl.uniform_2f(canvas_uniform, canvas_width, canvas_height);
 
             for (const DrawMesh& mesh : meshes)
-            {
-                gl.bind_vertex_array(mesh.vertex_array);
-
-                gl.uniform_4f(
-                    color_uniform,
-                    mesh.fill.r,
-                    mesh.fill.g,
-                    mesh.fill.b,
-                    mesh.fill.a);
-                gl.bind_buffer(GL_ELEMENT_ARRAY_BUFFER, mesh.fill_index_buffer);
-                gl.draw_elements(
-                    GL_TRIANGLES,
-                    mesh.fill_index_count,
-                    GL_UNSIGNED_INT,
-                    nullptr);
-
-                if (mesh.border_index_count > 0)
-                {
-                    const std::size_t mesh_segments =
-                        static_cast<std::size_t>(mesh.border_index_count)
-                        / kIndicesPerBorderSegment;
-                    const std::size_t visible_segments =
-                        (std::min)(remaining_border_segments, mesh_segments);
-                    remaining_border_segments -= visible_segments;
-
-                    if (visible_segments > 0)
-                    {
-                        gl.uniform_4f(
-                            color_uniform,
-                            mesh.border.r,
-                            mesh.border.g,
-                            mesh.border.b,
-                            mesh.border.a);
-                        gl.bind_buffer(GL_ELEMENT_ARRAY_BUFFER, mesh.border_index_buffer);
-                        gl.draw_elements(
-                            GL_TRIANGLES,
-                            static_cast<GLsizei>(visible_segments * kIndicesPerBorderSegment),
-                            GL_UNSIGNED_INT,
-                            nullptr);
-                    }
-                }
-            }
+                draw(mesh);
 
             gl.bind_vertex_array(0);
             gl.use_program(0);
@@ -599,6 +531,6 @@ void main()
 
     bool OpenGLRenderer::startup_animation_complete() const noexcept
     {
-        return !impl_ || impl_->startup_animation_complete();
+        return true;
     }
 }
