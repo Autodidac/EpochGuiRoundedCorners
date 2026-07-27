@@ -115,7 +115,7 @@ namespace
 {
     (void)notification;
 
-    const NSRect frame = NSMakeRect(0.0, 0.0, 960.0, 620.0);
+    const NSRect frame = NSMakeRect(0.0, 0.0, 1280.0, 820.0);
     window_ = [[NSWindow alloc]
         initWithContentRect:frame
         styleMask:(NSWindowStyleMaskTitled
@@ -125,7 +125,7 @@ namespace
         backing:NSBackingStoreBuffered
         defer:NO];
 
-    [window_ setTitle:@"EpochGUI Rounded Corners - OpenGL"];
+    [window_ setTitle:@"EpochGui Demo - Core and Optional Features"];
     [window_ setDelegate:self];
     [window_ center];
 
