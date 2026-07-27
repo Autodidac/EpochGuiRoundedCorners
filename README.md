@@ -4,6 +4,17 @@ Standalone C++23 prototype for backend-neutral rounded rectangle geometry using 
 
 The repository is intentionally separate from EpochEngine. It does not modify the editor, renderer frame order, GUI sprite batching, or any production EpochGUI source.
 
+## Windows release
+
+The Windows x64 release contains:
+
+- `EpochGuiRoundedCorners.exe` — native Direct2D window displaying all rounded-corner cases
+- `epoch_gui_rounded_corners_demo.exe` — headless geometry validator and SVG generator
+- `epochgui_rounded_corners_demo.svg` — generated reference output
+- `README.md`
+
+The Windows application uses the same `RoundedRectMesh` geometry as the headless contract. It is not a separate hard-coded drawing path.
+
 ## What it demonstrates
 
 - Uniform and independent per-corner radii
@@ -13,9 +24,10 @@ The repository is intentionally separate from EpochEngine. It does not modify th
 - Bounded tessellation from 1 to 64 segments per corner
 - Sanitized non-finite and negative input
 - Deterministic vertex and triangle-index generation
-- A headless SVG output that makes the geometry easy to inspect without binding the experiment to one renderer
+- Native Direct2D presentation on Windows
+- A headless SVG output for renderer-independent inspection and automated validation
 
-## Requirements
+## Requirements for source builds
 
 - CMake 3.28 or newer
 - A C++23 compiler with module support
@@ -36,26 +48,27 @@ When both repositories are sibling directories, the EpochEngine path is detected
 
 ```text
 Projects/
-├── EpochEngine/
-│   └── Engine/
-└── EpochGuiRoundedCorners/
+|-- EpochEngine/
+|   `-- Engine/
+`-- EpochGuiRoundedCorners/
 ```
 
 ```powershell
-cmake -S . -B build -G Ninja
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
-.\build\epoch_gui_rounded_corners_demo.exe
+.\build\EpochGuiRoundedCorners.exe
 ```
 
 For any other layout, pass the engine path explicitly:
 
 ```powershell
 cmake -S . -B build -G Ninja `
+  -DCMAKE_BUILD_TYPE=Release `
   -DEPOCH_ENGINE_ROOT="C:/Code/EpochEngine/Engine"
 ```
 
-The executable writes `epochgui_rounded_corners_demo.svg`. An alternate output path may be supplied as its first argument.
+The headless executable writes `epochgui_rounded_corners_demo.svg`. An alternate output path may be supplied as its first argument.
 
 ## Production integration
 
@@ -69,4 +82,4 @@ After the geometry and visual result are accepted:
 6. Preserve the current rectangular sprite path as the zero-radius fast path.
 7. Cache unchanged meshes by size, radii, border width, and segment count.
 
-The SVG writer is demonstration code only. The reusable production part is the rounded-rectangle module and mesh generator.
+The Direct2D and SVG presenters are demonstration adapters. The reusable production component is the backend-neutral rounded-rectangle module and mesh generator.
