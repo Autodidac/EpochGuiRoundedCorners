@@ -17,8 +17,6 @@ namespace
     constexpr int WGL_CONTEXT_PROFILE_MASK_ARB = 0x9126;
     constexpr int WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB = 0x0002;
     constexpr int WGL_CONTEXT_CORE_PROFILE_BIT_ARB = 0x00000001;
-    constexpr UINT_PTR kStartupAnimationTimer = 1;
-    constexpr UINT kStartupAnimationFrameMilliseconds = 16;
 
     using WglCreateContextAttribs = HGLRC(WINAPI*)(HDC, HGLRC, const int*);
     using WglSwapInterval = BOOL(WINAPI*)(int);
@@ -131,16 +129,6 @@ namespace
 
             ShowWindow(window_, SW_SHOWNORMAL);
             UpdateWindow(window_);
-
-            if (!epoch_gui_demo_startup_animation_complete(renderer_))
-            {
-                animation_timer_ = SetTimer(
-                    window_,
-                    kStartupAnimationTimer,
-                    kStartupAnimationFrameMilliseconds,
-                    nullptr);
-            }
-
             return true;
         }
 
@@ -219,12 +207,6 @@ namespace
                 return;
             graphics_shutdown_ = true;
 
-            if (animation_timer_ != 0 && window_)
-            {
-                KillTimer(window_, animation_timer_);
-                animation_timer_ = 0;
-            }
-
             if (render_context_ && device_context_)
                 wglMakeCurrent(device_context_, render_context_);
 
@@ -270,18 +252,6 @@ namespace
                 EndPaint(window, &paint);
                 return 0;
             }
-            case WM_TIMER:
-                if (wparam == kStartupAnimationTimer)
-                {
-                    InvalidateRect(window, nullptr, FALSE);
-                    if (epoch_gui_demo_startup_animation_complete(renderer_))
-                    {
-                        KillTimer(window, kStartupAnimationTimer);
-                        animation_timer_ = 0;
-                    }
-                    return 0;
-                }
-                break;
             case WM_SIZE:
                 if (renderer_)
                 {
@@ -345,7 +315,6 @@ namespace
         HDC device_context_{};
         HGLRC render_context_{};
         epoch_gui_demo_renderer* renderer_{};
-        UINT_PTR animation_timer_{};
         bool graphics_shutdown_{};
     };
 }
