@@ -37,13 +37,14 @@ jobs:
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build libx11-dev libgl1-mesa-dev
+          sudo apt-get install -y -qq ninja-build clang-18 libx11-dev libgl1-mesa-dev
 
       - name: Configure
         id: configure
         continue-on-error: true
         run: >-
           cmake -S EpochGui_Demo -B build -G Ninja
+          -DCMAKE_CXX_COMPILER=clang++-18
           -DCMAKE_BUILD_TYPE=Release
           -DEPOCHGUI_ROOT=${{ github.workspace }}/EpochGui
           -DBUILD_TESTING=ON
