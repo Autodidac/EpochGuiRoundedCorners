@@ -7,10 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 
-if(MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
-
 if(NOT CMAKE_GENERATOR MATCHES "Ninja|Visual Studio")
     message(FATAL_ERROR "EpochGUI's C++23 module demo requires Ninja or Visual Studio.")
 endif()
@@ -30,12 +26,14 @@ set(_epoch_resolved_engine_root "")
 foreach(_candidate IN LISTS _epoch_engine_candidates)
     get_filename_component(_candidate_abs "${_candidate}" ABSOLUTE)
 
-    if(EXISTS "${_candidate_abs}/dep/EpochGui/modules/epoch.gui.ixx")
+    if(EXISTS "${_candidate_abs}/dep/EpochGui/modules/epoch.gui.ixx"
+        AND EXISTS "${_candidate_abs}/dep/EpochGui/modules/epoch.gui.rounded_rect.ixx")
         set(_epoch_resolved_engine_root "${_candidate_abs}")
         break()
     endif()
 
-    if(EXISTS "${_candidate_abs}/Engine/dep/EpochGui/modules/epoch.gui.ixx")
+    if(EXISTS "${_candidate_abs}/Engine/dep/EpochGui/modules/epoch.gui.ixx"
+        AND EXISTS "${_candidate_abs}/Engine/dep/EpochGui/modules/epoch.gui.rounded_rect.ixx")
         set(_epoch_resolved_engine_root "${_candidate_abs}/Engine")
         break()
     endif()
@@ -43,34 +41,23 @@ endforeach()
 
 if(NOT _epoch_resolved_engine_root)
     message(FATAL_ERROR
-        "EpochGUI was not found. Pass -DEPOCH_ENGINE_ROOT=<EpochEngine>/Engine. "
-        "Expected dep/EpochGui/modules/epoch.gui.ixx below that directory.")
+        "EpochGUI with optional rounded-rectangle support was not found. "
+        "Pass -DEPOCH_ENGINE_ROOT=<EpochEngine>/Engine.")
 endif()
 
 set(EPOCH_ENGINE_ROOT "${_epoch_resolved_engine_root}" CACHE PATH
     "Path to EpochEngine's Engine directory" FORCE)
+set(EPOCHGUI_SOURCE_ROOT "${EPOCH_ENGINE_ROOT}" CACHE PATH
+    "EpochGui source root used by the demo" FORCE)
+set(EPOCHGUI_ENABLE_ROUNDED_RECT ON CACHE BOOL
+    "Enable EpochGui rounded-rectangle geometry for this demo" FORCE)
 
 message(STATUS "EpochEngine root: ${EPOCH_ENGINE_ROOT}")
 
-add_library(epoch_gui_rounded_rect STATIC
-    src/rounded_rect.cpp
+add_subdirectory(
+    "${EPOCH_ENGINE_ROOT}/dep/EpochGui"
+    "${CMAKE_CURRENT_BINARY_DIR}/EpochGui"
 )
-
-set_target_properties(epoch_gui_rounded_rect PROPERTIES
-    CXX_SCAN_FOR_MODULES ON
-)
-
-target_sources(epoch_gui_rounded_rect PUBLIC
-    FILE_SET epoch_gui_rounded_rect_modules TYPE CXX_MODULES
-        BASE_DIRS
-            "${EPOCH_ENGINE_ROOT}/dep/EpochGui/modules"
-            "${CMAKE_CURRENT_SOURCE_DIR}/modules"
-        FILES
-            "${EPOCH_ENGINE_ROOT}/dep/EpochGui/modules/epoch.gui.ixx"
-            "${CMAKE_CURRENT_SOURCE_DIR}/modules/epoch.gui.rounded_rect.ixx"
-)
-
-target_compile_features(epoch_gui_rounded_rect PUBLIC cxx_std_23)
 
 add_library(epoch_gui_demo_renderer STATIC
     src/opengl_renderer.cpp
@@ -91,10 +78,7 @@ target_include_directories(epoch_gui_demo_renderer PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-target_link_libraries(epoch_gui_demo_renderer PUBLIC
-    epoch_gui_rounded_rect
-)
-
+target_link_libraries(epoch_gui_demo_renderer PUBLIC EpochGui)
 target_compile_features(epoch_gui_demo_renderer PUBLIC cxx_std_23)
 
 if(WIN32)
@@ -158,7 +142,6 @@ set_target_properties(epoch_gui_rounded_corners_app PROPERTIES
 target_compile_features(epoch_gui_rounded_corners_app PRIVATE cxx_std_23)
 
 set(_epoch_gui_targets
-    epoch_gui_rounded_rect
     epoch_gui_demo_renderer
     epoch_gui_rounded_corners_app
 )
@@ -173,10 +156,7 @@ if(BUILD_TESTING)
         CXX_SCAN_FOR_MODULES ON
     )
 
-    target_link_libraries(epoch_gui_rounded_rect_tests PRIVATE
-        epoch_gui_rounded_rect
-    )
-
+    target_link_libraries(epoch_gui_rounded_rect_tests PRIVATE EpochGui)
     target_compile_features(epoch_gui_rounded_rect_tests PRIVATE cxx_std_23)
     list(APPEND _epoch_gui_targets epoch_gui_rounded_rect_tests)
 
