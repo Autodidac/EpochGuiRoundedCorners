@@ -44,3 +44,9 @@ void epoch_gui_demo_render(epoch_gui_demo_renderer* renderer)
     if (renderer)
         renderer->renderer.render();
 }
+
+bool epoch_gui_demo_startup_animation_complete(
+    const epoch_gui_demo_renderer* renderer)
+{
+    return !renderer || renderer->renderer.startup_animation_complete();
+}
