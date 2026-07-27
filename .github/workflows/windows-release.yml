@@ -11,6 +11,7 @@ on:
       - include/**
       - modules/**
       - src/**
+      - tests/**
       - .github/workflows/windows-release.yml
   workflow_dispatch:
 
@@ -50,16 +51,58 @@ jobs:
         shell: pwsh
         run: cmake --build build --config Release --parallel
 
-      - name: Validate geometry and SVG generation
+      - name: Run geometry contract test
         shell: pwsh
         run: ctest --test-dir build -C Release --output-on-failure
 
-      - name: Package Windows release
+      - name: Locate Microsoft Defender
+        shell: pwsh
+        run: |
+          $candidates = @(
+              (Join-Path $env:ProgramFiles 'Windows Defender\MpCmdRun.exe')
+          )
+
+          $platformRoot = Join-Path $env:ProgramData 'Microsoft\Windows Defender\Platform'
+          if (Test-Path $platformRoot) {
+              $latestPlatform = Get-ChildItem $platformRoot -Directory |
+                  Sort-Object Name -Descending |
+                  Select-Object -First 1
+              if ($latestPlatform) {
+                  $candidates += Join-Path $latestPlatform.FullName 'MpCmdRun.exe'
+              }
+          }
+
+          $defender = $candidates |
+              Where-Object { Test-Path $_ } |
+              Select-Object -First 1
+
+          if (-not $defender) {
+              throw 'Microsoft Defender command-line scanner was not found; refusing to publish an unscanned executable.'
+          }
+
+          "DEFENDER=$defender" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          & $defender -GetFiles | Out-Null
+          Write-Host "Using Defender scanner: $defender"
+
+      - name: Scan Windows executable
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:GITHUB_WORKSPACE 'build\Release\EpochGuiRoundedCorners.exe'
+          if (-not (Test-Path $exe)) {
+              throw "Expected application was not built: $exe"
+          }
+
+          & $env:DEFENDER -Scan -ScanType 3 -File $exe
+          if ($LASTEXITCODE -ne 0) {
+              throw "Microsoft Defender rejected the executable with exit code $LASTEXITCODE"
+          }
+
+      - name: Package one-executable Windows release
         shell: pwsh
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
           if ($version -notmatch '^\d+\.\d+\.\d+$') {
-              throw "VERSION must contain major.minor.patch"
+              throw 'VERSION must contain major.minor.patch'
           }
 
           $tag = "v$version"
@@ -74,14 +117,7 @@ jobs:
           New-Item -ItemType Directory -Path $stage | Out-Null
 
           Copy-Item build/Release/EpochGuiRoundedCorners.exe $stage
-          Copy-Item build/Release/epoch_gui_rounded_corners_demo.exe $stage
           Copy-Item README.md $stage
-
-          & build/Release/epoch_gui_rounded_corners_demo.exe `
-              (Join-Path $stage 'epochgui_rounded_corners_demo.svg')
-          if ($LASTEXITCODE -ne 0) {
-              throw "Packaged geometry validation failed with exit code $LASTEXITCODE"
-          }
 
           @(
               "EpochGUI Rounded Corners $tag"
@@ -89,8 +125,15 @@ jobs:
               "Platform: Windows x64"
               "Compiler: MSVC"
               "Renderer: OpenGL 3.2 core through Win32/WGL"
-              "Third-party runtime dependencies: none"
+              "Release executables: 1"
+              "Third-party libraries: none"
+              "Pre-publication malware scan: Microsoft Defender"
           ) | Set-Content -Path (Join-Path $stage 'BUILD.txt') -Encoding utf8
+
+          $executables = @(Get-ChildItem $stage -Filter '*.exe' -File)
+          if ($executables.Count -ne 1 -or $executables[0].Name -ne 'EpochGuiRoundedCorners.exe') {
+              throw 'Release staging must contain exactly one executable named EpochGuiRoundedCorners.exe.'
+          }
 
           Compress-Archive -Path "$stage/*" -DestinationPath $zip -CompressionLevel Optimal
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -99,6 +142,14 @@ jobs:
           "RELEASE_TAG=$tag" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RELEASE_ZIP=$zip" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RELEASE_CHECKSUM=$checksum" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Scan final ZIP
+        shell: pwsh
+        run: |
+          & $env:DEFENDER -Scan -ScanType 3 -File $env:RELEASE_ZIP
+          if ($LASTEXITCODE -ne 0) {
+              throw "Microsoft Defender rejected the release ZIP with exit code $LASTEXITCODE"
+          }
 
       - name: Upload Windows workflow artifact
         uses: actions/upload-artifact@v4
@@ -114,17 +165,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $notes = "Windows x64 OpenGL 3.2 core demo through native Win32/WGL. Dependency-free except EpochGUI; no third-party runtime DLLs. Linux GLX and macOS Cocoa builds run independently and cannot block this Windows release."
+          $notes = "Windows x64 OpenGL demo containing one application executable. Geometry validation runs only inside CI and is not shipped. The executable and final ZIP passed Microsoft Defender before publication."
 
           gh release view $env:RELEASE_TAG *> $null
           if ($LASTEXITCODE -eq 0) {
               gh release upload $env:RELEASE_TAG $env:RELEASE_ZIP $env:RELEASE_CHECKSUM --clobber
-              if ($LASTEXITCODE -ne 0) { throw "Release asset upload failed" }
+              if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed' }
               gh release edit $env:RELEASE_TAG `
                   --target $env:GITHUB_SHA `
                   --title "EpochGUI Rounded Corners $env:RELEASE_TAG" `
                   --notes $notes
-              if ($LASTEXITCODE -ne 0) { throw "Release metadata update failed" }
+              if ($LASTEXITCODE -ne 0) { throw 'Release metadata update failed' }
           }
           else {
               gh release create $env:RELEASE_TAG `
@@ -133,7 +184,7 @@ jobs:
                   --target $env:GITHUB_SHA `
                   --title "EpochGUI Rounded Corners $env:RELEASE_TAG" `
                   --notes $notes
-              if ($LASTEXITCODE -ne 0) { throw "Release creation failed" }
+              if ($LASTEXITCODE -ne 0) { throw 'Release creation failed' }
           }
 
   linux:
@@ -159,7 +210,7 @@ jobs:
             scanner=/usr/lib/llvm-18/bin/clang-scan-deps
           fi
           if [ -z "$scanner" ]; then
-            echo "clang-scan-deps for Clang 18 was not found" >&2
+            echo 'clang-scan-deps for Clang 18 was not found' >&2
             exit 1
           fi
 
@@ -188,7 +239,7 @@ jobs:
       - name: Build
         run: cmake --build build --parallel --verbose
 
-      - name: Validate geometry and SVG generation
+      - name: Run geometry contract test
         run: ctest --test-dir build --output-on-failure
 
   macos:
@@ -220,7 +271,7 @@ jobs:
             -DEPOCH_ENGINE_ROOT="${{ github.workspace }}/EpochEngine/Engine"
 
       - name: Build
-        run: cmake --build build --parallel
+        run: cmake --build build --parallel --verbose
 
-      - name: Validate geometry and SVG generation
+      - name: Run geometry contract test
         run: ctest --test-dir build --output-on-failure
