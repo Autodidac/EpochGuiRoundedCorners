@@ -1,0 +1,156 @@
+name: EpochGui Demo Linux Release
+
+on:
+  workflow_run:
+    workflows:
+      - EpochGui Demo Release
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: epochgui-demo-linux-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Resolve source revision
+        id: revision
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out EpochGui demo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.revision.outputs.sha }}
+
+      - name: Check out EpochGui
+        uses: actions/checkout@v4
+        with:
+          repository: Autodidac/EpochGui
+          ref: main
+          path: EpochGui
+
+      - name: Install Linux build dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang-18 \
+            clang-tools-18 \
+            cmake \
+            ninja-build \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxext-dev
+
+      - name: Configure
+        shell: bash
+        run: |
+          cmake -S . -B build/linux-release -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DBUILD_TESTING=ON \
+            -DEPOCHGUI_ENABLE_ROUNDED_RECT=ON \
+            -DEPOCHGUI_ENABLE_INPUT=ON \
+            -DEPOCHGUI_ROOT="${GITHUB_WORKSPACE}/EpochGui"
+
+      - name: Build
+        shell: bash
+        run: cmake --build build/linux-release --parallel
+
+      - name: Run EpochGui tests
+        shell: bash
+        run: ctest --test-dir build/linux-release --output-on-failure
+
+      - name: Package Linux x64 archive
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "VERSION must contain major.minor.patch" >&2
+            exit 1
+          fi
+
+          source_binary="${GITHUB_WORKSPACE}/build/linux-release/EpochGuiDemo"
+          if [[ ! -x "$source_binary" ]]; then
+            echo "Expected executable was not built: $source_binary" >&2
+            exit 1
+          fi
+
+          stage_name="EpochGui_Demo-v${version}-linux-x64"
+          stage="${RUNNER_TEMP}/${stage_name}"
+          archive="${GITHUB_WORKSPACE}/${stage_name}.tar.gz"
+          checksum="${archive}.sha256"
+
+          rm -rf "$stage" "$archive" "$checksum"
+          mkdir -p "$stage/assets"
+
+          install -m 0755 "$source_binary" "$stage/EpochGuiDemo"
+          install -m 0644 README.md "$stage/README.md"
+          install -m 0644 assets/epochgui_demo.ppm "$stage/assets/epochgui_demo.ppm"
+
+          cat > "$stage/BUILD.txt" <<EOF
+          EpochGui Demo v${version}
+          Commit: ${{ steps.revision.outputs.sha }}
+          Platform: Linux x64
+          Compiler: Clang 18
+          Renderer: OpenGL 3.2 core through native X11/GLX
+          Library: Autodidac/EpochGui
+          Input: optional EpochGui fallback enabled for the standalone demo
+          Window chrome: custom EpochGui title bar with native decorations enabled by default and toggleable at runtime
+          Icon: _NET_WM_ICON supplied by the native X11 host
+          Contents: one user-facing executable plus README, BUILD metadata, and the demo image asset
+          EOF
+
+          tar -C "$RUNNER_TEMP" -czf "$archive" "$stage_name"
+          sha256sum "$(basename "$archive")" > "$checksum"
+
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Linux workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: epochgui-demo-linux
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.checksum }}
+          if-no-files-found: error
+
+      - name: Attach Linux files to GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.package.outputs.tag }}"
+          archive="${{ steps.package.outputs.archive }}"
+          checksum="${{ steps.package.outputs.checksum }}"
+
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" \
+              --target "${{ steps.revision.outputs.sha }}" \
+              --title "EpochGui Demo $tag" \
+              --notes "Cross-platform EpochGui interactive catalog release."
+          fi
+
+          gh release upload "$tag" "$archive" "$checksum" --clobber
