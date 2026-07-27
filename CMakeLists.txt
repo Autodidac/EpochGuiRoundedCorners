@@ -88,7 +88,7 @@ target_compile_features(epoch_gui_rounded_corners_demo PRIVATE cxx_std_23)
 
 if(WIN32)
     add_executable(epoch_gui_rounded_corners_windows WIN32
-        src/windows_demo.cpp
+        src/windows_app.cpp
     )
 
     set_target_properties(epoch_gui_rounded_corners_windows PROPERTIES
