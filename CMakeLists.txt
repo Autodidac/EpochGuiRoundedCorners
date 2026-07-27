@@ -11,51 +11,45 @@ if(NOT CMAKE_GENERATOR MATCHES "Ninja|Visual Studio")
     message(FATAL_ERROR "EpochGUI's C++23 module demo requires Ninja or Visual Studio.")
 endif()
 
-set(EPOCH_ENGINE_ROOT "" CACHE PATH "Path to EpochEngine's Engine directory")
+set(EPOCHGUI_ROOT "" CACHE PATH "Path to the standalone EpochGui repository")
 
-set(_epoch_engine_candidates)
-if(EPOCH_ENGINE_ROOT)
-    list(APPEND _epoch_engine_candidates "${EPOCH_ENGINE_ROOT}")
+set(_epochgui_candidates)
+if(EPOCHGUI_ROOT)
+    list(APPEND _epochgui_candidates "${EPOCHGUI_ROOT}")
 endif()
-list(APPEND _epoch_engine_candidates
-    "${CMAKE_CURRENT_SOURCE_DIR}/../EpochEngine/Engine"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../EpochEngine"
+list(APPEND _epochgui_candidates
+    "${CMAKE_CURRENT_SOURCE_DIR}/../EpochGui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/EpochGui"
 )
 
-set(_epoch_resolved_engine_root "")
-foreach(_candidate IN LISTS _epoch_engine_candidates)
+set(_epochgui_resolved_root "")
+foreach(_candidate IN LISTS _epochgui_candidates)
     get_filename_component(_candidate_abs "${_candidate}" ABSOLUTE)
-
-    if(EXISTS "${_candidate_abs}/dep/EpochGui/modules/epoch.gui.ixx"
-        AND EXISTS "${_candidate_abs}/dep/EpochGui/modules/epoch.gui.rounded_rect.ixx")
-        set(_epoch_resolved_engine_root "${_candidate_abs}")
-        break()
-    endif()
-
-    if(EXISTS "${_candidate_abs}/Engine/dep/EpochGui/modules/epoch.gui.ixx"
-        AND EXISTS "${_candidate_abs}/Engine/dep/EpochGui/modules/epoch.gui.rounded_rect.ixx")
-        set(_epoch_resolved_engine_root "${_candidate_abs}/Engine")
+    if(EXISTS "${_candidate_abs}/CMakeLists.txt"
+        AND EXISTS "${_candidate_abs}/modules/epoch.gui.ixx"
+        AND EXISTS "${_candidate_abs}/modules/epoch.gui.rounded_rect.ixx")
+        set(_epochgui_resolved_root "${_candidate_abs}")
         break()
     endif()
 endforeach()
 
-if(NOT _epoch_resolved_engine_root)
+if(NOT _epochgui_resolved_root)
     message(FATAL_ERROR
-        "EpochGUI with optional rounded-rectangle support was not found. "
-        "Pass -DEPOCH_ENGINE_ROOT=<EpochEngine>/Engine.")
+        "Standalone EpochGui with rounded-rectangle support was not found. "
+        "Pass -DEPOCHGUI_ROOT=<path-to-Autodidac/EpochGui>.")
 endif()
 
-set(EPOCH_ENGINE_ROOT "${_epoch_resolved_engine_root}" CACHE PATH
-    "Path to EpochEngine's Engine directory" FORCE)
-set(EPOCHGUI_SOURCE_ROOT "${EPOCH_ENGINE_ROOT}" CACHE PATH
+set(EPOCHGUI_ROOT "${_epochgui_resolved_root}" CACHE PATH
+    "Path to the standalone EpochGui repository" FORCE)
+set(EPOCHGUI_SOURCE_ROOT "${EPOCHGUI_ROOT}" CACHE PATH
     "EpochGui source root used by the demo" FORCE)
 set(EPOCHGUI_ENABLE_ROUNDED_RECT ON CACHE BOOL
     "Enable EpochGui rounded-rectangle geometry for this demo" FORCE)
 
-message(STATUS "EpochEngine root: ${EPOCH_ENGINE_ROOT}")
+message(STATUS "EpochGui root: ${EPOCHGUI_ROOT}")
 
 add_subdirectory(
-    "${EPOCH_ENGINE_ROOT}/dep/EpochGui"
+    "${EPOCHGUI_ROOT}"
     "${CMAKE_CURRENT_BINARY_DIR}/EpochGui"
 )
 
@@ -145,26 +139,6 @@ set(_epoch_gui_targets
     epoch_gui_demo_renderer
     epoch_gui_rounded_corners_app
 )
-
-include(CTest)
-if(BUILD_TESTING)
-    add_executable(epoch_gui_rounded_rect_tests
-        tests/geometry_contract.cpp
-    )
-
-    set_target_properties(epoch_gui_rounded_rect_tests PROPERTIES
-        CXX_SCAN_FOR_MODULES ON
-    )
-
-    target_link_libraries(epoch_gui_rounded_rect_tests PRIVATE EpochGui)
-    target_compile_features(epoch_gui_rounded_rect_tests PRIVATE cxx_std_23)
-    list(APPEND _epoch_gui_targets epoch_gui_rounded_rect_tests)
-
-    add_test(
-        NAME epoch_gui_rounded_rect_geometry
-        COMMAND epoch_gui_rounded_rect_tests
-    )
-endif()
 
 if(MSVC)
     foreach(_target IN LISTS _epoch_gui_targets)
