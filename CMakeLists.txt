@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(EpochGuiRoundedCorners LANGUAGES CXX)
+project(EpochGuiDemo LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,7 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 
 if(NOT CMAKE_GENERATOR MATCHES "Ninja|Visual Studio")
-    message(FATAL_ERROR "EpochGUI's C++23 module demo requires Ninja or Visual Studio.")
+    message(FATAL_ERROR "EpochGui_Demo requires Ninja or Visual Studio for C++23 modules.")
 endif()
 
 set(EPOCHGUI_ROOT "" CACHE PATH "Path to the standalone EpochGui repository")
@@ -35,7 +35,7 @@ endforeach()
 
 if(NOT _epochgui_resolved_root)
     message(FATAL_ERROR
-        "Standalone EpochGui with rounded-rectangle support was not found. "
+        "Standalone EpochGui with optional rounded-rectangle support was not found. "
         "Pass -DEPOCHGUI_ROOT=<path-to-Autodidac/EpochGui>.")
 endif()
 
@@ -44,7 +44,7 @@ set(EPOCHGUI_ROOT "${_epochgui_resolved_root}" CACHE PATH
 set(EPOCHGUI_SOURCE_ROOT "${EPOCHGUI_ROOT}" CACHE PATH
     "EpochGui source root used by the demo" FORCE)
 set(EPOCHGUI_ENABLE_ROUNDED_RECT ON CACHE BOOL
-    "Enable EpochGui rounded-rectangle geometry for this demo" FORCE)
+    "Enable optional EpochGui rounded-rectangle geometry for comparison" FORCE)
 
 message(STATUS "EpochGui root: ${EPOCHGUI_ROOT}")
 
@@ -78,19 +78,19 @@ target_compile_features(epoch_gui_demo_renderer PUBLIC cxx_std_23)
 if(WIN32)
     enable_language(RC)
 
-    add_executable(epoch_gui_rounded_corners_app WIN32
+    add_executable(epoch_gui_demo_app WIN32
         src/platform/windows_main.cpp
         src/platform/windows_resources.rc
     )
 
-    target_compile_definitions(epoch_gui_rounded_corners_app PRIVATE
+    target_compile_definitions(epoch_gui_demo_app PRIVATE
         UNICODE
         _UNICODE
         WINVER=0x0A00
         _WIN32_WINNT=0x0A00
     )
 
-    target_link_libraries(epoch_gui_rounded_corners_app PRIVATE
+    target_link_libraries(epoch_gui_demo_app PRIVATE
         epoch_gui_demo_renderer
         opengl32
     )
@@ -103,11 +103,11 @@ elseif(APPLE)
     find_library(COCOA_FRAMEWORK Cocoa REQUIRED)
     find_library(OPENGL_FRAMEWORK OpenGL REQUIRED)
 
-    add_executable(epoch_gui_rounded_corners_app MACOSX_BUNDLE
+    add_executable(epoch_gui_demo_app MACOSX_BUNDLE
         src/platform/macos_main.mm
     )
 
-    target_link_libraries(epoch_gui_rounded_corners_app PRIVATE
+    target_link_libraries(epoch_gui_demo_app PRIVATE
         epoch_gui_demo_renderer
         "${COCOA_FRAMEWORK}"
         "${OPENGL_FRAMEWORK}"
@@ -116,11 +116,11 @@ elseif(UNIX)
     find_package(OpenGL REQUIRED)
     find_package(X11 REQUIRED)
 
-    add_executable(epoch_gui_rounded_corners_app
+    add_executable(epoch_gui_demo_app
         src/platform/linux_glx_main.cpp
     )
 
-    target_link_libraries(epoch_gui_rounded_corners_app PRIVATE
+    target_link_libraries(epoch_gui_demo_app PRIVATE
         epoch_gui_demo_renderer
         OpenGL::GL
         X11::X11
@@ -129,15 +129,15 @@ else()
     message(FATAL_ERROR "No native OpenGL host is defined for this platform.")
 endif()
 
-set_target_properties(epoch_gui_rounded_corners_app PROPERTIES
-    OUTPUT_NAME "EpochGuiRoundedCorners"
+set_target_properties(epoch_gui_demo_app PROPERTIES
+    OUTPUT_NAME "EpochGuiDemo"
 )
 
-target_compile_features(epoch_gui_rounded_corners_app PRIVATE cxx_std_23)
+target_compile_features(epoch_gui_demo_app PRIVATE cxx_std_23)
 
 set(_epoch_gui_targets
     epoch_gui_demo_renderer
-    epoch_gui_rounded_corners_app
+    epoch_gui_demo_app
 )
 
 if(MSVC)
@@ -151,5 +151,5 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
 endif()
 
 if(WIN32)
-    set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT epoch_gui_rounded_corners_app)
+    set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT epoch_gui_demo_app)
 endif()
