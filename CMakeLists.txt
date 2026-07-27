@@ -72,6 +72,31 @@ target_sources(epoch_gui_rounded_rect PUBLIC
 
 target_compile_features(epoch_gui_rounded_rect PUBLIC cxx_std_23)
 
+add_library(epoch_gui_demo_renderer STATIC
+    src/opengl_renderer.cpp
+    src/app_bridge.cpp
+)
+
+set_target_properties(epoch_gui_demo_renderer PROPERTIES
+    CXX_SCAN_FOR_MODULES ON
+)
+
+target_sources(epoch_gui_demo_renderer PUBLIC
+    FILE_SET epoch_gui_demo_renderer_modules TYPE CXX_MODULES
+        BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/modules"
+        FILES "${CMAKE_CURRENT_SOURCE_DIR}/modules/epoch.gui.demo.opengl.ixx"
+)
+
+target_include_directories(epoch_gui_demo_renderer PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
+target_link_libraries(epoch_gui_demo_renderer PUBLIC
+    epoch_gui_rounded_rect
+)
+
+target_compile_features(epoch_gui_demo_renderer PUBLIC cxx_std_23)
+
 add_executable(epoch_gui_rounded_corners_demo
     src/main.cpp
 )
@@ -87,40 +112,80 @@ target_link_libraries(epoch_gui_rounded_corners_demo PRIVATE
 target_compile_features(epoch_gui_rounded_corners_demo PRIVATE cxx_std_23)
 
 if(WIN32)
-    add_executable(epoch_gui_rounded_corners_windows WIN32
-        src/windows_app.cpp
+    add_executable(epoch_gui_rounded_corners_app WIN32
+        src/platform/windows_main.cpp
     )
 
-    set_target_properties(epoch_gui_rounded_corners_windows PROPERTIES
-        CXX_SCAN_FOR_MODULES ON
-        OUTPUT_NAME "EpochGuiRoundedCorners"
-    )
-
-    set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT epoch_gui_rounded_corners_windows)
-
-    target_compile_definitions(epoch_gui_rounded_corners_windows PRIVATE
+    target_compile_definitions(epoch_gui_rounded_corners_app PRIVATE
         UNICODE
         _UNICODE
     )
 
-    target_compile_features(epoch_gui_rounded_corners_windows PRIVATE cxx_std_23)
-
-    target_link_libraries(epoch_gui_rounded_corners_windows PRIVATE
-        epoch_gui_rounded_rect
-        d2d1
-        dwrite
+    target_link_libraries(epoch_gui_rounded_corners_app PRIVATE
+        epoch_gui_demo_renderer
+        opengl32
     )
+elseif(APPLE)
+    enable_language(OBJCXX)
+    set(CMAKE_OBJCXX_STANDARD 23)
+    set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
+    set(CMAKE_OBJCXX_EXTENSIONS OFF)
+
+    find_library(COCOA_FRAMEWORK Cocoa REQUIRED)
+    find_library(OPENGL_FRAMEWORK OpenGL REQUIRED)
+
+    add_executable(epoch_gui_rounded_corners_app MACOSX_BUNDLE
+        src/platform/macos_main.mm
+    )
+
+    target_link_libraries(epoch_gui_rounded_corners_app PRIVATE
+        epoch_gui_demo_renderer
+        "${COCOA_FRAMEWORK}"
+        "${OPENGL_FRAMEWORK}"
+    )
+elseif(UNIX)
+    find_package(OpenGL REQUIRED)
+    find_package(X11 REQUIRED)
+
+    add_executable(epoch_gui_rounded_corners_app
+        src/platform/linux_main.cpp
+    )
+
+    target_link_libraries(epoch_gui_rounded_corners_app PRIVATE
+        epoch_gui_demo_renderer
+        OpenGL::GL
+        X11::X11
+    )
+else()
+    message(FATAL_ERROR "No native OpenGL host is defined for this platform.")
 endif()
 
+set_target_properties(epoch_gui_rounded_corners_app PROPERTIES
+    OUTPUT_NAME "EpochGuiRoundedCorners"
+)
+
+target_compile_features(epoch_gui_rounded_corners_app PRIVATE cxx_std_23)
+
 if(MSVC)
-    target_compile_options(epoch_gui_rounded_rect PRIVATE /W4 /permissive-)
-    target_compile_options(epoch_gui_rounded_corners_demo PRIVATE /W4 /permissive-)
-    if(TARGET epoch_gui_rounded_corners_windows)
-        target_compile_options(epoch_gui_rounded_corners_windows PRIVATE /W4 /permissive-)
-    endif()
+    foreach(_target IN ITEMS
+        epoch_gui_rounded_rect
+        epoch_gui_demo_renderer
+        epoch_gui_rounded_corners_demo
+        epoch_gui_rounded_corners_app)
+        target_compile_options(${_target} PRIVATE /W4 /permissive-)
+    endforeach()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    target_compile_options(epoch_gui_rounded_rect PRIVATE -Wall -Wextra -Wpedantic)
-    target_compile_options(epoch_gui_rounded_corners_demo PRIVATE -Wall -Wextra -Wpedantic)
+    foreach(_target IN ITEMS
+        epoch_gui_rounded_rect
+        epoch_gui_demo_renderer
+        epoch_gui_rounded_corners_demo
+        epoch_gui_rounded_corners_app)
+        target_compile_options(${_target} PRIVATE -Wall -Wextra -Wpedantic)
+    endforeach()
+endif()
+
+if(WIN32)
+    set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT epoch_gui_rounded_corners_app)
 endif()
 
 include(CTest)
