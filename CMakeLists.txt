@@ -98,7 +98,7 @@ target_link_libraries(epoch_gui_demo_renderer PUBLIC
 target_compile_features(epoch_gui_demo_renderer PUBLIC cxx_std_23)
 
 add_executable(epoch_gui_rounded_corners_demo
-    src/main.cpp
+    src/headless_main.cpp
 )
 
 set_target_properties(epoch_gui_rounded_corners_demo PROPERTIES
@@ -148,7 +148,7 @@ elseif(UNIX)
     find_package(X11 REQUIRED)
 
     add_executable(epoch_gui_rounded_corners_app
-        src/platform/linux_main.cpp
+        src/platform/linux_glx_main.cpp
     )
 
     target_link_libraries(epoch_gui_rounded_corners_app PRIVATE
@@ -163,8 +163,6 @@ endif()
 set_target_properties(epoch_gui_rounded_corners_app PROPERTIES
     OUTPUT_NAME "EpochGuiRoundedCorners"
 )
-
-target_compile_features(epoch_gui_rounded_corners_app PRIVATE cxx_std_23)
 
 if(MSVC)
     foreach(_target IN ITEMS
