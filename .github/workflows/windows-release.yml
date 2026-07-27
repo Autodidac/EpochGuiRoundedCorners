@@ -141,11 +141,30 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Install native build dependencies
+      - name: Install native windowing dependencies
         run: |
+          set -euxo pipefail
           sudo apt-get update
-          sudo apt-get install -y clang-18 clang-tools-18 ninja-build libx11-dev libgl1-mesa-dev
-          command -v clang-scan-deps-18
+          sudo apt-get install --no-install-recommends -y libx11-dev libgl1-mesa-dev
+
+      - name: Resolve preinstalled Clang module tools
+        run: |
+          set -euxo pipefail
+          clang++-18 --version
+          cmake --version
+          ninja --version
+
+          scanner="$(command -v clang-scan-deps-18 || true)"
+          if [ -z "$scanner" ] && [ -x /usr/lib/llvm-18/bin/clang-scan-deps ]; then
+            scanner=/usr/lib/llvm-18/bin/clang-scan-deps
+          fi
+          if [ -z "$scanner" ]; then
+            echo "clang-scan-deps for Clang 18 was not found" >&2
+            exit 1
+          fi
+
+          "$scanner" --version
+          echo "CLANG_SCAN_DEPS=$scanner" >> "$GITHUB_ENV"
 
       - name: Check out rounded-corner demo
         uses: actions/checkout@v4
@@ -158,17 +177,16 @@ jobs:
           path: EpochEngine
 
       - name: Configure
-        env:
-          CC: clang-18
-          CXX: clang++-18
         run: >-
           cmake -S . -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_CXX_COMPILER=clang++-18
+          -DCMAKE_CXX_COMPILER_CLANG_SCAN_DEPS="${{ env.CLANG_SCAN_DEPS }}"
           -DBUILD_TESTING=ON
           -DEPOCH_ENGINE_ROOT="${{ github.workspace }}/EpochEngine/Engine"
 
       - name: Build
-        run: cmake --build build --parallel
+        run: cmake --build build --parallel --verbose
 
       - name: Validate geometry and SVG generation
         run: ctest --test-dir build --output-on-failure
