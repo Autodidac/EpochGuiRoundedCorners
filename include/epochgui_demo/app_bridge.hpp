@@ -24,9 +24,6 @@ extern "C"
 
     void epoch_gui_demo_render(epoch_gui_demo_renderer* renderer);
 
-    [[nodiscard]] bool epoch_gui_demo_startup_animation_complete(
-        const epoch_gui_demo_renderer* renderer);
-
 #ifdef __cplusplus
 }
 #endif
