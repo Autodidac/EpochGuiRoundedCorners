@@ -131,6 +131,8 @@ This repository owns:
 
 No EpochGui implementation is duplicated here.
 
+The visible splitter originally used different geometry for drawing and hit testing. CMake now generates the renderer implementation from `src/complete_demo_renderer.cpp` with the demo-only splitter adapter injected immediately after the global module fragment. This preserves valid C++23 module ordering while making the interaction use the same rectangle that is rendered.
+
 ## EpochGui checkout
 
 Keep the repositories beside one another:
@@ -193,18 +195,19 @@ open build/macos/EpochGuiDemo.app
 ## Repository layout
 
 ```text
-CMakeLists.txt                            Demo targets and optional features
+CMakeLists.txt                            Demo targets and generated adapter
 CMakePresets.json                         Windows and Linux presets
 assets/epochgui_demo.ppm                  Runtime-loaded image asset
-modules/epoch.gui.demo.opengl.ixx         Renderer module interface
-src/complete_demo_renderer.cpp            Interactive EpochGui catalog
-src/complete_demo_renderer_build.cpp      Splitter-capture build adapter
+modules/epoch.gui.demo.opengl.ixx         Renderer module interface and splitter state
+src/complete_demo_renderer.cpp            Interactive EpochGui catalog source
 src/platform/complete_windows_main.cpp    Win32/WGL host
 src/platform/complete_linux_glx_main.cpp  X11/GLX host
 src/platform/epochgui_demo.ico            Windows application icon
 .github/workflows/windows-release.yml     Windows package and release creation
 .github/workflows/linux-release.yml       Linux package attachment
 ```
+
+The generated renderer source is written under the selected CMake build directory and is not committed.
 
 ## Releases
 
