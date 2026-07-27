@@ -85,6 +85,7 @@ if(WIN32)
     add_executable(epoch_gui_demo_app WIN32
         src/platform/windows_main.cpp
         src/platform/windows_resources.rc
+        src/platform/windows_message_coords.hpp
     )
 
     target_compile_definitions(epoch_gui_demo_app PRIVATE
@@ -99,6 +100,12 @@ if(WIN32)
         dwmapi
         opengl32
     )
+
+    if(MSVC)
+        target_compile_options(epoch_gui_demo_app PRIVATE
+            "/FI${CMAKE_CURRENT_SOURCE_DIR}/src/platform/windows_message_coords.hpp"
+        )
+    endif()
 elseif(APPLE)
     enable_language(OBJCXX)
     set(CMAKE_OBJCXX_STANDARD 23)
