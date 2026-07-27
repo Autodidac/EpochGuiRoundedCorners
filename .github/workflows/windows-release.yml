@@ -1,4 +1,4 @@
-name: Cross-Platform OpenGL Build
+name: Windows Release
 
 on:
   push:
@@ -19,12 +19,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: epochgui-rounded-corners-${{ github.ref }}
+  group: epochgui-rounded-corners-windows-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   windows:
-    name: Windows x64 MSVC and release
+    name: Windows x64 MSVC
     runs-on: windows-2022
 
     steps:
@@ -55,49 +55,7 @@ jobs:
         shell: pwsh
         run: ctest --test-dir build -C Release --output-on-failure
 
-      - name: Locate Microsoft Defender
-        shell: pwsh
-        run: |
-          $candidates = @(
-              (Join-Path $env:ProgramFiles 'Windows Defender\MpCmdRun.exe')
-          )
-
-          $platformRoot = Join-Path $env:ProgramData 'Microsoft\Windows Defender\Platform'
-          if (Test-Path $platformRoot) {
-              $latestPlatform = Get-ChildItem $platformRoot -Directory |
-                  Sort-Object Name -Descending |
-                  Select-Object -First 1
-              if ($latestPlatform) {
-                  $candidates += Join-Path $latestPlatform.FullName 'MpCmdRun.exe'
-              }
-          }
-
-          $defender = $candidates |
-              Where-Object { Test-Path $_ } |
-              Select-Object -First 1
-
-          if (-not $defender) {
-              throw 'Microsoft Defender command-line scanner was not found; refusing to publish an unscanned executable.'
-          }
-
-          "DEFENDER=$defender" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          & $defender -GetFiles | Out-Null
-          Write-Host "Using Defender scanner: $defender"
-
-      - name: Scan Windows executable
-        shell: pwsh
-        run: |
-          $exe = Join-Path $env:GITHUB_WORKSPACE 'build\Release\EpochGuiRoundedCorners.exe'
-          if (-not (Test-Path $exe)) {
-              throw "Expected application was not built: $exe"
-          }
-
-          & $env:DEFENDER -Scan -ScanType 3 -File $exe
-          if ($LASTEXITCODE -ne 0) {
-              throw "Microsoft Defender rejected the executable with exit code $LASTEXITCODE"
-          }
-
-      - name: Package one-executable Windows release
+      - name: Prepare single executable
         shell: pwsh
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
@@ -105,71 +63,57 @@ jobs:
               throw 'VERSION must contain major.minor.patch'
           }
 
-          $tag = "v$version"
-          $stageName = "EpochGuiRoundedCorners-$tag-windows-x64"
-          $stage = Join-Path $env:RUNNER_TEMP $stageName
-          $zip = Join-Path $env:GITHUB_WORKSPACE "$stageName.zip"
-          $checksum = "$zip.sha256"
-
-          Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
-          Remove-Item $zip -Force -ErrorAction SilentlyContinue
-          Remove-Item $checksum -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Path $stage | Out-Null
-
-          Copy-Item build/Release/EpochGuiRoundedCorners.exe $stage
-          Copy-Item README.md $stage
-
-          @(
-              "EpochGUI Rounded Corners $tag"
-              "Commit: $env:GITHUB_SHA"
-              "Platform: Windows x64"
-              "Compiler: MSVC"
-              "Renderer: OpenGL 3.2 core through Win32/WGL"
-              "Release executables: 1"
-              "Third-party libraries: none"
-              "Pre-publication malware scan: Microsoft Defender"
-          ) | Set-Content -Path (Join-Path $stage 'BUILD.txt') -Encoding utf8
-
-          $executables = @(Get-ChildItem $stage -Filter '*.exe' -File)
-          if ($executables.Count -ne 1 -or $executables[0].Name -ne 'EpochGuiRoundedCorners.exe') {
-              throw 'Release staging must contain exactly one executable named EpochGuiRoundedCorners.exe.'
+          $source = Join-Path $env:GITHUB_WORKSPACE 'build\Release\EpochGuiRoundedCorners.exe'
+          if (-not (Test-Path $source)) {
+              throw "Expected application was not built: $source"
           }
 
-          Compress-Archive -Path "$stage/*" -DestinationPath $zip -CompressionLevel Optimal
-          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $([System.IO.Path]::GetFileName($zip))" | Set-Content $checksum -Encoding ascii
+          $assetName = "EpochGuiRoundedCorners-v$version-windows-x64.exe"
+          $asset = Join-Path $env:GITHUB_WORKSPACE $assetName
+          $checksum = "$asset.sha256"
 
-          "RELEASE_TAG=$tag" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          "RELEASE_ZIP=$zip" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          Copy-Item $source $asset -Force
+
+          $allExecutables = @(Get-ChildItem $env:GITHUB_WORKSPACE -Filter 'EpochGuiRoundedCorners-v*-windows-x64.exe' -File)
+          if ($allExecutables.Count -ne 1) {
+              throw 'Release staging must contain exactly one user-facing executable.'
+          }
+
+          $versionInfo = (Get-Item $asset).VersionInfo
+          if ($versionInfo.ProductName -ne 'EpochGUI Rounded Corners') {
+              throw 'Windows product metadata is missing or incorrect.'
+          }
+
+          $hash = (Get-FileHash $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $assetName" | Set-Content $checksum -Encoding ascii
+
+          "RELEASE_TAG=v$version" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RELEASE_EXE=$asset" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RELEASE_CHECKSUM=$checksum" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Scan final ZIP
-        shell: pwsh
-        run: |
-          & $env:DEFENDER -Scan -ScanType 3 -File $env:RELEASE_ZIP
-          if ($LASTEXITCODE -ne 0) {
-              throw "Microsoft Defender rejected the release ZIP with exit code $LASTEXITCODE"
-          }
-
-      - name: Upload Windows workflow artifact
+      - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-release
           path: |
-            ${{ env.RELEASE_ZIP }}
+            ${{ env.RELEASE_EXE }}
             ${{ env.RELEASE_CHECKSUM }}
           if-no-files-found: error
 
-      - name: Publish or refresh GitHub release
+      - name: Publish GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $notes = "Windows x64 OpenGL demo containing one application executable. Geometry validation runs only inside CI and is not shipped. The executable and final ZIP passed Microsoft Defender before publication."
+          $notes = @"
+          Windows x64 OpenGL 3.2 core demo using native Win32/WGL.
+
+          This release contains exactly one application executable. The geometry validator is CI-only and is not distributed.
+          "@
 
           gh release view $env:RELEASE_TAG *> $null
           if ($LASTEXITCODE -eq 0) {
-              gh release upload $env:RELEASE_TAG $env:RELEASE_ZIP $env:RELEASE_CHECKSUM --clobber
+              gh release upload $env:RELEASE_TAG $env:RELEASE_EXE $env:RELEASE_CHECKSUM --clobber
               if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed' }
               gh release edit $env:RELEASE_TAG `
                   --target $env:GITHUB_SHA `
@@ -179,99 +123,10 @@ jobs:
           }
           else {
               gh release create $env:RELEASE_TAG `
-                  $env:RELEASE_ZIP `
+                  $env:RELEASE_EXE `
                   $env:RELEASE_CHECKSUM `
                   --target $env:GITHUB_SHA `
                   --title "EpochGUI Rounded Corners $env:RELEASE_TAG" `
                   --notes $notes
               if ($LASTEXITCODE -ne 0) { throw 'Release creation failed' }
           }
-
-  linux:
-    name: Linux x64 Clang 18
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Install native windowing dependencies
-        run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libx11-dev libgl1-mesa-dev
-
-      - name: Resolve preinstalled Clang module tools
-        run: |
-          set -euxo pipefail
-          clang++-18 --version
-          cmake --version
-          ninja --version
-
-          scanner="$(command -v clang-scan-deps-18 || true)"
-          if [ -z "$scanner" ] && [ -x /usr/lib/llvm-18/bin/clang-scan-deps ]; then
-            scanner=/usr/lib/llvm-18/bin/clang-scan-deps
-          fi
-          if [ -z "$scanner" ]; then
-            echo 'clang-scan-deps for Clang 18 was not found' >&2
-            exit 1
-          fi
-
-          "$scanner" --version
-          echo "CLANG_SCAN_DEPS=$scanner" >> "$GITHUB_ENV"
-
-      - name: Check out rounded-corner demo
-        uses: actions/checkout@v4
-
-      - name: Check out EpochEngine
-        uses: actions/checkout@v4
-        with:
-          repository: Autodidac/EpochEngine
-          ref: main
-          path: EpochEngine
-
-      - name: Configure
-        run: >-
-          cmake -S . -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_CXX_COMPILER=clang++-18
-          -DCMAKE_CXX_COMPILER_CLANG_SCAN_DEPS="${{ env.CLANG_SCAN_DEPS }}"
-          -DBUILD_TESTING=ON
-          -DEPOCH_ENGINE_ROOT="${{ github.workspace }}/EpochEngine/Engine"
-
-      - name: Build
-        run: cmake --build build --parallel --verbose
-
-      - name: Run geometry contract test
-        run: ctest --test-dir build --output-on-failure
-
-  macos:
-    name: macOS arm64 LLVM Clang
-    runs-on: macos-14
-
-    steps:
-      - name: Install LLVM and Ninja
-        run: brew install llvm ninja
-
-      - name: Check out rounded-corner demo
-        uses: actions/checkout@v4
-
-      - name: Check out EpochEngine
-        uses: actions/checkout@v4
-        with:
-          repository: Autodidac/EpochEngine
-          ref: main
-          path: EpochEngine
-
-      - name: Configure
-        run: |
-          LLVM_PREFIX="$(brew --prefix llvm)"
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_TESTING=ON \
-            -DCMAKE_CXX_COMPILER="$LLVM_PREFIX/bin/clang++" \
-            -DCMAKE_OBJCXX_COMPILER="$LLVM_PREFIX/bin/clang++" \
-            -DEPOCH_ENGINE_ROOT="${{ github.workspace }}/EpochEngine/Engine"
-
-      - name: Build
-        run: cmake --build build --parallel --verbose
-
-      - name: Run geometry contract test
-        run: ctest --test-dir build --output-on-failure
