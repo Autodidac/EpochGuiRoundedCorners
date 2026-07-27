@@ -55,7 +55,7 @@ jobs:
         shell: pwsh
         run: ctest --test-dir build -C Release --output-on-failure
 
-      - name: Prepare single executable
+      - name: Package single-application ZIP
         shell: pwsh
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
@@ -68,27 +68,53 @@ jobs:
               throw "Expected application was not built: $source"
           }
 
-          $assetName = "EpochGuiRoundedCorners-v$version-windows-x64.exe"
-          $asset = Join-Path $env:GITHUB_WORKSPACE $assetName
-          $checksum = "$asset.sha256"
+          $stageName = "EpochGuiRoundedCorners-v$version-windows-x64"
+          $stage = Join-Path $env:RUNNER_TEMP $stageName
+          $zip = Join-Path $env:GITHUB_WORKSPACE "$stageName.zip"
+          $checksum = "$zip.sha256"
+          $verify = Join-Path $env:RUNNER_TEMP "$stageName-verify"
 
-          Copy-Item $source $asset -Force
+          Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item $verify -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item $zip -Force -ErrorAction SilentlyContinue
+          Remove-Item $checksum -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $stage | Out-Null
 
-          $allExecutables = @(Get-ChildItem $env:GITHUB_WORKSPACE -Filter 'EpochGuiRoundedCorners-v*-windows-x64.exe' -File)
-          if ($allExecutables.Count -ne 1) {
-              throw 'Release staging must contain exactly one user-facing executable.'
+          Copy-Item $source (Join-Path $stage 'EpochGuiRoundedCorners.exe')
+          Copy-Item README.md $stage
+
+          @(
+              "EpochGUI Rounded Corners v$version"
+              "Commit: $env:GITHUB_SHA"
+              'Platform: Windows x64'
+              'Compiler: MSVC'
+              'Renderer: OpenGL 3.2 core through native Win32/WGL'
+              'Contents: one user-facing executable'
+          ) | Set-Content -Path (Join-Path $stage 'BUILD.txt') -Encoding utf8
+
+          $stagedExecutables = @(Get-ChildItem $stage -Filter '*.exe' -File)
+          if ($stagedExecutables.Count -ne 1 -or $stagedExecutables[0].Name -ne 'EpochGuiRoundedCorners.exe') {
+              throw 'Release staging must contain exactly EpochGuiRoundedCorners.exe and no other executable.'
           }
 
-          $versionInfo = (Get-Item $asset).VersionInfo
+          $versionInfo = $stagedExecutables[0].VersionInfo
           if ($versionInfo.ProductName -ne 'EpochGUI Rounded Corners') {
               throw 'Windows product metadata is missing or incorrect.'
           }
 
-          $hash = (Get-FileHash $asset -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $assetName" | Set-Content $checksum -Encoding ascii
+          Compress-Archive -Path "$stage\*" -DestinationPath $zip -CompressionLevel Optimal
+
+          Expand-Archive -Path $zip -DestinationPath $verify -Force
+          $verifiedExecutables = @(Get-ChildItem $verify -Filter '*.exe' -File -Recurse)
+          if ($verifiedExecutables.Count -ne 1 -or $verifiedExecutables[0].Name -ne 'EpochGuiRoundedCorners.exe') {
+              throw 'Packaged ZIP does not contain exactly one expected executable.'
+          }
+
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $([System.IO.Path]::GetFileName($zip))" | Set-Content $checksum -Encoding ascii
 
           "RELEASE_TAG=v$version" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          "RELEASE_EXE=$asset" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RELEASE_ZIP=$zip" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RELEASE_CHECKSUM=$checksum" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Upload workflow artifact
@@ -96,7 +122,7 @@ jobs:
         with:
           name: windows-release
           path: |
-            ${{ env.RELEASE_EXE }}
+            ${{ env.RELEASE_ZIP }}
             ${{ env.RELEASE_CHECKSUM }}
           if-no-files-found: error
 
@@ -105,11 +131,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $notes = 'Windows x64 OpenGL 3.2 core demo using native Win32/WGL. This release contains exactly one application executable. The geometry validator is CI-only and is not distributed.'
+          $notes = 'Windows x64 OpenGL 3.2 core demo packaged as a ZIP. The archive contains exactly one application executable, README.md, and BUILD.txt. The geometry validator remains CI-only.'
 
           gh release view $env:RELEASE_TAG *> $null
           if ($LASTEXITCODE -eq 0) {
-              gh release upload $env:RELEASE_TAG $env:RELEASE_EXE $env:RELEASE_CHECKSUM --clobber
+              gh release upload $env:RELEASE_TAG $env:RELEASE_ZIP $env:RELEASE_CHECKSUM --clobber
               if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed' }
               gh release edit $env:RELEASE_TAG `
                   --target $env:GITHUB_SHA `
@@ -119,7 +145,7 @@ jobs:
           }
           else {
               gh release create $env:RELEASE_TAG `
-                  $env:RELEASE_EXE `
+                  $env:RELEASE_ZIP `
                   $env:RELEASE_CHECKSUM `
                   --target $env:GITHUB_SHA `
                   --title "EpochGUI Rounded Corners $env:RELEASE_TAG" `
