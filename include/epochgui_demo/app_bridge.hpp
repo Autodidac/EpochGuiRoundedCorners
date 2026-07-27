@@ -63,6 +63,13 @@ extern "C"
         EPOCH_GUI_DEMO_COMMAND_CLOSE = 3
     };
 
+    enum epoch_gui_demo_native_frame_mode
+    {
+        EPOCH_GUI_DEMO_FRAME_MODE_NONE = -1,
+        EPOCH_GUI_DEMO_FRAME_MODE_BORDERLESS = 0,
+        EPOCH_GUI_DEMO_FRAME_MODE_NATIVE = 1
+    };
+
     struct epoch_gui_demo_renderer;
 
     [[nodiscard]] epoch_gui_demo_renderer* epoch_gui_demo_create(void);
@@ -105,12 +112,19 @@ extern "C"
         bool alt,
         bool super_key);
 
+    void epoch_gui_demo_text_input(
+        epoch_gui_demo_renderer* renderer,
+        const char* utf8_text);
+
     [[nodiscard]] int epoch_gui_demo_window_hit_test(
         const epoch_gui_demo_renderer* renderer,
         float x,
         float y);
 
     [[nodiscard]] int epoch_gui_demo_take_window_command(
+        epoch_gui_demo_renderer* renderer);
+
+    [[nodiscard]] int epoch_gui_demo_take_native_frame_mode(
         epoch_gui_demo_renderer* renderer);
 
     void epoch_gui_demo_render(epoch_gui_demo_renderer* renderer);
