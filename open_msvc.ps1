@@ -9,7 +9,7 @@ try {
     }
 
     $Selected = (Get-Content "$Root\build\.active_generator" -Raw).Trim()
-    $Solution = "$Root\build\$Selected\EpochGuiRoundedCorners.sln"
+    $Solution = "$Root\build\$Selected\EpochGuiDemo.sln"
     if (-not (Test-Path $Solution)) {
         throw "Generated solution was not found: $Solution"
     }
