@@ -18,4 +18,4 @@ esac
 cmake --preset "$preset"
 cmake --build --preset "$preset"
 ctest --test-dir "$build_dir" --output-on-failure
-printf 'Built: %s/EpochGuiRoundedCorners\n' "$build_dir"
+printf 'Built: %s/EpochGuiDemo\n' "$build_dir"
