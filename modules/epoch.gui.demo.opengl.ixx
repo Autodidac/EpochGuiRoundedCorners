@@ -8,6 +8,21 @@ export module epoch.gui.demo.opengl;
 export import epoch.gui.rounded_rect;
 export import epoch.gui.input;
 
+namespace epochengine::gui_lib
+{
+    [[nodiscard]] inline bool splitter_hit_test_with_capture(
+        const SplitterLayout& layout,
+        Vec2 pointer_position,
+        float hit_slop,
+        bool pointer_pressed) noexcept
+    {
+        static bool dragging{};
+        if (pointer_pressed)
+            dragging = splitter_hit_test(layout, pointer_position, hit_slop);
+        return dragging;
+    }
+}
+
 export namespace epochengine::gui_demo
 {
     namespace rounded_rect = epochengine::gui_lib::rounded_rect;
