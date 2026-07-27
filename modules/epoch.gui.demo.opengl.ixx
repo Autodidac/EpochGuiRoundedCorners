@@ -28,7 +28,6 @@ export namespace epochengine::gui_demo
         [[nodiscard]] bool initialize(OpenGLProcLoader loader) noexcept;
         void resize(int width, int height) noexcept;
         void render() noexcept;
-        [[nodiscard]] bool startup_animation_complete() const noexcept;
 
     private:
         struct Impl;
