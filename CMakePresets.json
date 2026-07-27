@@ -1,0 +1,94 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "linux-gcc-release",
+      "displayName": "Linux GCC Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-gcc",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "g++-14",
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "linux-clang-release",
+      "displayName": "Linux Clang Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-clang",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "clang++-18",
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "msvc-vs2026",
+      "displayName": "MSVC x64 - Visual Studio 2026",
+      "generator": "Visual Studio 18 2026",
+      "architecture": {
+        "value": "x64",
+        "strategy": "set"
+      },
+      "binaryDir": "${sourceDir}/build/vs2026",
+      "cacheVariables": {
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "msvc-vs2022",
+      "displayName": "MSVC x64 - Visual Studio 2022",
+      "generator": "Visual Studio 17 2022",
+      "architecture": {
+        "value": "x64",
+        "strategy": "set"
+      },
+      "binaryDir": "${sourceDir}/build/vs2022",
+      "cacheVariables": {
+        "BUILD_TESTING": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-gcc-release",
+      "configurePreset": "linux-gcc-release",
+      "jobs": 0
+    },
+    {
+      "name": "linux-clang-release",
+      "configurePreset": "linux-clang-release",
+      "jobs": 0
+    },
+    {
+      "name": "vs2026-debug",
+      "configurePreset": "msvc-vs2026",
+      "configuration": "Debug",
+      "jobs": 0
+    },
+    {
+      "name": "vs2026-release",
+      "configurePreset": "msvc-vs2026",
+      "configuration": "Release",
+      "jobs": 0
+    },
+    {
+      "name": "vs2022-debug",
+      "configurePreset": "msvc-vs2022",
+      "configuration": "Debug",
+      "jobs": 0
+    },
+    {
+      "name": "vs2022-release",
+      "configurePreset": "msvc-vs2022",
+      "configuration": "Release",
+      "jobs": 0
+    }
+  ]
+}
