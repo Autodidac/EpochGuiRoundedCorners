@@ -119,6 +119,8 @@ if(WIN32)
     target_compile_definitions(epoch_gui_rounded_corners_app PRIVATE
         UNICODE
         _UNICODE
+        WINVER=0x0A00
+        _WIN32_WINNT=0x0A00
     )
 
     target_link_libraries(epoch_gui_rounded_corners_app PRIVATE
@@ -170,7 +172,7 @@ if(MSVC)
         epoch_gui_demo_renderer
         epoch_gui_rounded_corners_demo
         epoch_gui_rounded_corners_app)
-        target_compile_options(${_target} PRIVATE /W4 /permissive-)
+        target_compile_options(${_target} PRIVATE /W4 /permissive- /Zc:__cplusplus)
     endforeach()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     foreach(_target IN ITEMS
