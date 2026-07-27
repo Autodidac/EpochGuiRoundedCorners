@@ -1,79 +1,80 @@
-# EpochGUI Rounded Corners Demo
+# EpochGui Demo
 
-A small C++23/OpenGL demonstration of the optional rounded-rectangle geometry provided by [`Autodidac/EpochGui`](https://github.com/Autodidac/EpochGui).
+A cross-platform C++23 feature gallery for [`Autodidac/EpochGui`](https://github.com/Autodidac/EpochGui).
 
-This repository contains only the demo renderer and native application hosts. It does not duplicate the rounded-rectangle module, implementation, or geometry tests.
+The application renders the same EpochGui layouts in two side-by-side columns:
 
-## EpochGui feature used
+- **Core rectangular path** — uses the standard `epoch.gui` layout and state APIs with ordinary rectangular surfaces.
+- **Optional rounded path** — uses the exact same layouts while enabling `epoch.gui.rounded_rect` for rounded fills and borders.
 
-The demo enables:
+This makes the optional geometry visible without confusing it with the core layout system.
 
-```text
--DEPOCHGUI_ENABLE_ROUNDED_RECT=ON
-```
+## Features demonstrated
 
-and imports:
+The gallery uses real EpochGui calculations for:
 
-```cpp
-import epoch.gui.rounded_rect;
-```
+- Segmented-control bounds and item placement
+- Progress-bar track, padding, range, and fill geometry
+- Splitter layout with before, handle, and after regions
+- Selectable-list rows, visible ranges, hover state, and selection state
+- Popup placement and viewport clamping
+- Floating-window title bar, content, close button, and resize handle
+- Loading-screen panel and progress layout
+- Core `Vec2`, `Rect`, and containment primitives
 
-The optional EpochGui module supplies renderer-neutral meshes for:
+The right column additionally demonstrates:
 
-- Filled rounded rectangles
-- Independent radius per corner
-- Optional borders with configurable thickness
-- Pill-shaped controls
-- Proportional radius normalization when corners overlap
-- Configurable tessellation from 1 to 64 segments per corner
+- Uniform rounded corners
+- Rounded control borders
+- Rounded panels and popup surfaces
+- Pill-style progress fills
+- The optional renderer-neutral `RoundedRectMesh`
 
-The full API and build instructions live in the EpochGui repository README.
+## Architecture
 
-## Demo application
+EpochGui owns the reusable layout, state, hit-testing, and optional rounded-mesh generation.
 
-The demo uploads the EpochGui-generated vertices and indices through one shared OpenGL 3.2 core renderer with native hosts:
+This repository owns only:
 
-- Windows: Win32 and WGL
-- Linux: X11 and GLX
-- macOS: Cocoa and the system OpenGL framework
+- A small OpenGL 3.2 core renderer
+- Native Win32/WGL, X11/GLX, and Cocoa hosts
+- A compact built-in bitmap font used to label the gallery
+- Build scripts and release packaging
 
-The application renders complete meshes normally. It contains no startup delay, progressive border reveal, or timing behavior.
-
-No third-party windowing or OpenGL-loader library is used.
-
-## Repository layout
-
-```text
-CMakePresets.json                 Windows and Linux configure/build presets
-build_msvc.bat/.ps1               Generate, build, test, and locate the Windows executable
-generate_msvc.ps1                 Select Visual Studio 2026 or 2022 automatically
-open_msvc.bat/.ps1                Generate and open the Visual Studio solution
-build_linux.sh                    Configure, build, and test a Linux preset
-include/                          Native host bridge
-modules/epoch.gui.demo.opengl.ixx Demo renderer module
-src/opengl_renderer.cpp           OpenGL submission of EpochGui meshes
-src/platform/                     Native Windows, Linux, and macOS hosts
-```
+The demo does not duplicate EpochGui geometry or layout implementation.
 
 ## EpochGui checkout
 
-Place the repositories beside one another:
+Keep the repositories beside one another:
 
 ```text
 Projects/
 |-- EpochGui/
-`-- EpochGuiRoundedCorners/
+`-- EpochGui_Demo/
 ```
 
-The demo finds `../EpochGui` automatically.
+The demo detects `../EpochGui` automatically.
 
-For another layout, pass:
+For another layout, configure with:
 
 ```text
 -DEPOCHGUI_ROOT=/path/to/EpochGui
 ```
 
+The demo enables the optional comparison feature with:
+
+```text
+-DEPOCHGUI_ENABLE_ROUNDED_RECT=ON
+```
+
 ## Build
+
+Requirements:
+
+- CMake 3.28 or newer
+- A C++23 compiler with module support
+- Visual Studio 2022/2026 or Ninja
+- Native OpenGL and window-system development components
 
 ### Windows
 
@@ -89,19 +90,38 @@ Build the application and run the EpochGui tests:
 build_msvc.bat Release
 ```
 
-The script selects Visual Studio 2026 when available, otherwise Visual Studio 2022.
+Output:
+
+```text
+build/vs2026/Release/EpochGuiDemo.exe
+```
+
+or:
+
+```text
+build/vs2022/Release/EpochGuiDemo.exe
+```
 
 ### Linux
+
+GCC preset:
 
 ```bash
 chmod +x build_linux.sh
 ./build_linux.sh linux-gcc-release
 ```
 
-or:
+Clang preset:
 
 ```bash
 ./build_linux.sh linux-clang-release
+```
+
+Outputs:
+
+```text
+build/linux-gcc/EpochGuiDemo
+build/linux-clang/EpochGuiDemo
 ```
 
 Clang requires a matching `clang-scan-deps` installation.
@@ -115,17 +135,36 @@ cmake -S . -B build/macos -G Ninja \
   -DBUILD_TESTING=ON
 cmake --build build/macos
 ctest --test-dir build/macos --output-on-failure
-open build/macos/EpochGuiRoundedCorners.app
+open build/macos/EpochGuiDemo.app
 ```
+
+## Repository layout
+
+```text
+CMakeLists.txt                     Demo targets and EpochGui integration
+CMakePresets.json                  Windows and Linux presets
+build_msvc.bat/.ps1                Generate, build, test, and locate the executable
+generate_msvc.ps1                 Select Visual Studio 2026 or 2022
+open_msvc.bat/.ps1                Generate and open the solution
+build_linux.sh                    Configure, build, and test Linux presets
+include/epochgui_demo/            Native renderer bridge
+modules/epoch.gui.demo.opengl.ixx Demo renderer module
+src/opengl_renderer.cpp           Side-by-side EpochGui feature gallery
+src/platform/                     Native Windows, Linux, and macOS hosts
+```
+
+## Rendering boundary
+
+The demo renderer converts EpochGui `Rect` layouts and optional `RoundedRectMesh` data into OpenGL triangles. EpochGui itself remains independent of OpenGL, platform windows, shaders, fonts, release packaging, and application-specific presentation.
 
 ## Windows release
 
 The release ZIP contains exactly:
 
 ```text
-EpochGuiRoundedCorners.exe
+EpochGuiDemo.exe
 README.md
 BUILD.txt
 ```
 
-The workflow builds against `Autodidac/EpochGui`, runs its tests, verifies that the archive contains one executable, and publishes a SHA-256 checksum beside the ZIP.
+The workflow checks out the current standalone EpochGui repository, enables rounded-rectangle support, builds both projects, runs the EpochGui tests, verifies that the archive contains one executable, and publishes a SHA-256 checksum beside the ZIP.
